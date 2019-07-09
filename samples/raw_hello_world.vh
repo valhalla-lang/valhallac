@@ -1,0 +1,3 @@
+# Without using the prelude, or importing IO...
+
+_write_stream _STDOUT "Hello, World.\n"

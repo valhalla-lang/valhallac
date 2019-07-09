@@ -1,5 +1,5 @@
 [package]
-name = "Valhalla"
+name = "valhalla"
 version = "0.1.0"
 authors = ["Demonstrandum <moi@knutsen.co>"]
 edition = "2018"
