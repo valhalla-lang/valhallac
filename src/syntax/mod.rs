@@ -8,6 +8,9 @@ mod token;
 /// Abstract Syntax Tree nodes and methods.
 mod ast;
 
+/// Dealing with associativity and precedence.
+mod operators;
+
 /// Lexer splits code up into a token-stream
 /// of relevant lexical tokens, making the
 /// parsing step a lot easier.
@@ -26,7 +29,7 @@ pub fn parse_file(filename : &str) {
         .expect("Could not open file for reading.");
     println!("Code:\n{}\n", code);
 
-    let stream = lexer::lex(&code);
+    let mut stream = lexer::lex(&code);
     println!("Stream:\n{}\n", stream.to_string());
 
     let tree = parser::parse(stream);

@@ -214,6 +214,14 @@ impl SymNode {
     pub fn new(value : &str) -> Nodes { Nodes::Sym(SymNode { value: value.to_string() }) }
 }
 
+impl CallNode {
+    pub fn new(callee : Nodes, operands : Vec<Nodes>) -> Nodes {
+        Nodes::Call(CallNode {
+            callee: Box::new(callee),
+            operands: operands,
+        })
+    }
+}
 
 /// Root branch of the AST.
 pub struct Root {

@@ -7,7 +7,7 @@
 mod syntax;
 
 
-fn main() {
+pub fn parse() {
     println!("\nTill Valhalla!\n");
     
     syntax::parse_file("./test.vh");

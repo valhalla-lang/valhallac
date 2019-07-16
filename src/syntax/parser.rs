@@ -1,28 +1,55 @@
 use super::token;
 use super::ast;
+use super::operators;
 
 use token::{Token, TokenType};
 use ast::{Numerics, Nodes};
 
 pub fn parse(stream : Vec<Token>) -> ast::Root {
-    let mut tree = ast::Root::new();
+    let mut environment = ParseEnvironment::new(stream);
 
-    for token in stream {
-        if token.is_atomic() {
-            tree.branches.push(atom(&token));
-        }
-    }
+    environment.start();
 
-    tree
+    environment.root
 }
 
-fn atom(token : &Token) -> Nodes {
-    match token.class {
-        TokenType::Ident => ast::IdentNode::new(&token.string),
-        TokenType::Op => ast::IdentNode::new(&token.string),
-        TokenType::Num => ast::NumNode::new(&*token.string),
-        TokenType::Str => ast::StrNode::new(&token.string),
-        _ => panic!("Passed non-atomic token to `atom` parser.")
+struct ParseEnvironment {
+    pub root : ast::Root,
+    pub stream : Vec<Token>,
+    pub optable : operators::PrecedenceTable
+}
+
+impl ParseEnvironment {
+    pub fn new(stream : Vec<Token>) -> Self {
+        ParseEnvironment {
+            root: ast::Root::new(),
+            stream: stream,
+            optable: operators::PrecedenceTable::new()
+        }
+    }
+    
+    pub fn start(&mut self) {
+        while !self.stream.is_empty() {
+            let token = self.stream.remove(0);
+            match token.class {
+                TokenType::Op => {
+                    if !self.optable.exists(&token.string) { panic!("Use of undefined operator."); }
+                    // ...
+                }
+                _ => panic!("Unexpected token.")
+            };
+        }
+        self.root.branches.push(ast::IdentNode::new("hello"));
+    }
+
+    fn atom(&self, token : &Token) -> Nodes {
+        match token.class {
+            TokenType::Ident => ast::IdentNode::new(&token.string),
+            TokenType::Op => ast::IdentNode::new(&token.string),
+            TokenType::Num => ast::NumNode::new(&*token.string),
+            TokenType::Str => ast::StrNode::new(&token.string),
+            _ => panic!("Passed non-atomic token to `atom` parser.")
+        }
     }
 }
 
