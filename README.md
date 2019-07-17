@@ -1,6 +1,7 @@
 <p align="center">	
-  <img alt="Valhalla Flag" height=230 src="https://raw.githubusercontent.com/Demonstrandum/valhalla/master/assets/logo.svg.png?token=AGMZNB7JZ47KSSVVXA2O2S25FXPWA" />
+  <img alt="Valhalla Flag" height=230 src="https://github.com/Demonstrandum/valhalla/raw/master/assets/logo.svg.png" />
 </p>
+
 # Valhalla Language
 
 This repository contains the front-end (parser and
