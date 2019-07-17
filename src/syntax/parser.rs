@@ -7,6 +7,7 @@ use ast::{Numerics, Nodes};
 
 pub fn parse(stream : Vec<Token>) -> ast::Root {
     let mut environment = ParseEnvironment::new(stream);
+    environment.optable.new_fun("max", 4);
 
     environment.start();
 
@@ -29,27 +30,35 @@ impl ParseEnvironment {
     }
     
     pub fn start(&mut self) {
-        while !self.stream.is_empty() {
-            let token = self.stream.remove(0);
-            match token.class {
-                TokenType::Op => {
-                    if !self.optable.exists(&token.string) { panic!("Use of undefined operator."); }
-                    // ...
-                }
-                _ => panic!("Unexpected token.")
-            };
-        }
-        self.root.branches.push(ast::IdentNode::new("hello"));
+        let e = self.expr(0);
+        self.root.branches.push(e);
     }
 
-    fn atom(&self, token : &Token) -> Nodes {
+    fn null_den(&mut self, token : &Token) -> Nodes {
         match token.class {
             TokenType::Ident => ast::IdentNode::new(&token.string),
-            TokenType::Op => ast::IdentNode::new(&token.string),
+            TokenType::Op => ast::CallNode::new(ast::IdentNode::new(&token.string), vec![self.expr(300)]),
             TokenType::Num => ast::NumNode::new(&*token.string),
             TokenType::Str => ast::StrNode::new(&token.string),
             _ => panic!("Passed non-atomic token to `atom` parser.")
         }
+    }
+
+    fn expr(&mut self, right_prec : i32) -> Nodes {
+        let popped = &self.stream.remove(0);
+        let mut left = self.null_den(popped);
+
+        while self.optable.precedence(&self.stream[0].string).unwrap_or(0) > right_prec {
+            if self.stream[0].class == TokenType::EOF { break; }
+            let op = self.optable.lookup(&self.stream.remove(0).string, 2).unwrap();
+            left = self.left_den(left, op.clone());
+        }
+        return left;
+    }
+
+    fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {
+        let right = self.expr(op.precedence - (if op.is_right() { 1 } else { 0 }));
+        ast::CallNode::new(ast::IdentNode::new(op.name), vec![left, right])
     }
 }
 

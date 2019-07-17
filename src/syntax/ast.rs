@@ -154,12 +154,14 @@ pub enum Nodes {
 impl fmt::Display for Nodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match self {
-            Nodes::Ident(node)  => format!("%ident {{ :value \"{}\" }}", node.value),
-            Nodes::Num(node)    => format!("%num {{ :value {} }}", node.value),
-            Nodes::Str(node)    => format!("%str {{ :value \"{}\" }}", node.value),
-            Nodes::Sym(node)    => format!("%sym {{ :value \"{}\" }}", node.value),
-            Nodes::Call(node)   => format!("%call {{ :callee \"{}\" }}", node.callee),
-            Nodes::Block(node)  => format!("%block {{ ... }}"),
+            Nodes::Ident(node)  => format!("%ident{{ :value \"{}\" }}", node.value),
+            Nodes::Num(node)    => format!("%num{{ :value {} }}", node.value),
+            Nodes::Str(node)    => format!("%str{{ :value \"{}\" }}", node.value),
+            Nodes::Sym(node)    => format!("%sym{{ :value \"{}\" }}", node.value),
+            Nodes::Call(node)   => format!(
+                "%call{{ :callee ({}) :operands [| {} |] }}", node.callee,
+                node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join(" ")),
+            Nodes::Block(node)  => format!("%block{{ ... }}"),
         };
         write!(f, "{}", printable)
     }
@@ -236,6 +238,6 @@ impl Root {
 impl fmt::Display for Root {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let str_mapped : Vec<String> = self.branches.iter().map(Nodes::to_string).collect();
-        write!(f, "%root{{\n  {}\n}}", str_mapped.join(",\n  "))
+        write!(f, "[|\n  {}\n|]", str_mapped.join(",\n  "))
     }
 }
