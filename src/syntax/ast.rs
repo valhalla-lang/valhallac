@@ -159,8 +159,8 @@ impl fmt::Display for Nodes {
             Nodes::Str(node)    => format!("%str{{ :value \"{}\" }}", node.value),
             Nodes::Sym(node)    => format!("%sym{{ :value \"{}\" }}", node.value),
             Nodes::Call(node)   => format!(
-                "%call{{ :callee ({}) :operands [| {} |] }}", node.callee,
-                node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join(" ")),
+                "%call{{\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", node.callee,
+                node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
             Nodes::Block(node)  => format!("%block{{ ... }}"),
         };
         write!(f, "{}", printable)
@@ -235,9 +235,31 @@ impl Root {
         Root { branches: Vec::new() }
     }
 }
+
+const TAB : &str = "  "; 
+
+pub fn pretty_print(node : &Nodes, depth : usize) -> String {
+    let tab = TAB.repeat(depth);
+    let printable = match node {
+            Nodes::Ident(_)  => format!("{}{}", tab, node),
+            Nodes::Num(_)    => format!("{}{}", tab, node),
+            Nodes::Str(_)    => format!("{}{}", tab, node),
+            Nodes::Sym(_)    => format!("{}{}", tab, node),
+            Nodes::Call(n)   => format!(
+                "{tab}%call{{\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operands [|\n{ops}\n{tab}{T}|]\n{tab}}}",
+                tab=tab, T=TAB,
+                calling=pretty_print(&*n.callee, depth + 2),
+                ops=n.operands.iter().map(|e| pretty_print(e, depth + 2)).collect::<Vec<String>>().join("\n")
+            ),
+            Nodes::Block(n)  => format!("%block{{ ... }}"),
+    };
+    printable
+}
+
+
 impl fmt::Display for Root {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let str_mapped : Vec<String> = self.branches.iter().map(Nodes::to_string).collect();
-        write!(f, "[|\n  {}\n|]", str_mapped.join(",\n  "))
+        let str_mapped : Vec<String> = self.branches.iter().map(|n| pretty_print(n, 0)).collect();
+        write!(f, "[|\n  {}\n|]", str_mapped.join("\n").split("\n").collect::<Vec<&str>>().join("\n  "))
     }
 }

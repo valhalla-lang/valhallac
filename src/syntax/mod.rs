@@ -33,5 +33,5 @@ pub fn parse_file(filename : &str) {
     println!("Stream:\n{}\n", stream.to_string());
 
     let tree = parser::parse(stream);
-    println!("AST:\n{}\n", tree)
+    println!("AST:\n{}\n", tree);
 }
