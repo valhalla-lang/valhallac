@@ -40,7 +40,7 @@ impl RegexExt for Regex {
 const IDENT_CHARS : &str = r"\p{L}\?!'\-_";
 
 lazy_static! {
-    static ref OP    : Regex = re!(r"\A([\+\.\*\|\\/\&%\$\^\~><=¬@\-]+)");
+    static ref OP    : Regex = re!(r"\A([,\+\.\*\|\\/\&%\$\^\~<¬=@>\-]+|:{2,})");
     static ref IDENT : Regex = re!(&format!(r"\A([{id}][{id}\p{{N}}]*)", id=IDENT_CHARS));
     static ref SYM   : Regex = re!(&format!(r"\A(:[{id}\p{{N}}]+)", id=IDENT_CHARS));
     static ref NUM   : Regex = re!(r"\A(\-?(?:(?:0[xX][0-9a-f]+)|(?:0[bB][01]+)|(?:0[Oo][0-7]+)|(?:(?:[0-9]+(?:\.[0-9]+)?(?:e[\+\-]?[0-9]+)?))))");
@@ -92,6 +92,15 @@ pub fn lex(string : &str) -> Vec<Token> {
             token_stream.push(Token::new(
                 tt, maybe_vec,
                 location::new(line, col, 2)));
+            col += 2;
+            current_char += 2;
+            continue;
+        }
+
+        if *maybe_vec == ": " {
+            token_stream.push(Token::new(
+                TokenType::Op, ":",
+                location::new(line, col, 1)));
             col += 2;
             current_char += 2;
             continue;

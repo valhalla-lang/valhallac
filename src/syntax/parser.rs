@@ -3,7 +3,7 @@ use super::ast;
 use super::operators;
 
 use token::{Token, TokenType};
-use ast::{Numerics, Nodes};
+use ast::Nodes;
 
 pub fn parse(stream : Vec<Token>) -> ast::Root {
     let mut environment = ParseEnvironment::new(stream);
@@ -30,14 +30,29 @@ impl ParseEnvironment {
     }
     
     pub fn start(&mut self) {
-        let e = self.expr(0);
-        self.root.branches.push(e);
+        let mut current = self.stream.first();
+        while current.is_some() && current.unwrap().class != TokenType::EOF {
+            if current.unwrap().class == TokenType::Term {
+                self.stream.remove(0);
+                current = self.stream.get(0);
+                continue;
+            }
+            let e = self.expr(0);
+            self.root.branches.push(e);
+            current = self.stream.get(0);
+        }
     }
 
     fn null_den(&mut self, token : &Token) -> Nodes {
         match token.class {
             TokenType::Ident => ast::IdentNode::new(&token.string),
-            TokenType::Op => ast::CallNode::new(ast::IdentNode::new(&token.string), vec![self.expr(300)]),
+            TokenType::Op => {  // Prefix Op.
+                let op = self.optable.lookup(&token.string, 1);
+                if op.is_some() {
+                    return ast::CallNode::new(ast::IdentNode::new(&token.string), vec![self.expr(300)]);
+                }
+                return panic!("`{}` is not a prefix operator.", token.string);
+            },
             TokenType::Num => ast::NumNode::new(&*token.string),
             TokenType::Str => ast::StrNode::new(&token.string),
             _ => panic!("Passed non-atomic token to `atom` parser.")
