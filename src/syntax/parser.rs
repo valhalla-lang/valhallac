@@ -1,12 +1,13 @@
 use super::token;
 use super::ast;
 use super::operators;
+use super::err;
 
 use token::{Token, TokenType};
-use ast::Nodes;
+use ast::{Nodes, Numerics};
 
-pub fn parse(stream : Vec<Token>) -> ast::Root {
-    let mut environment = ParseEnvironment::new(stream);
+pub fn parse(stream : Vec<Token>, file : &'static str) -> ast::Root {
+    let mut environment = ParseEnvironment::new(stream, file);
     environment.optable.new_fun("max", 4);
 
     environment.start();
@@ -17,15 +18,17 @@ pub fn parse(stream : Vec<Token>) -> ast::Root {
 struct ParseEnvironment {
     pub root : ast::Root,
     pub stream : Vec<Token>,
-    pub optable : operators::PrecedenceTable
+    pub optable : operators::PrecedenceTable,
+    pub file : &'static str
 }
 
 impl ParseEnvironment {
-    pub fn new(stream : Vec<Token>) -> Self {
+    pub fn new(stream : Vec<Token>, file : &'static str) -> Self {
         ParseEnvironment {
             root: ast::Root::new(),
             stream: stream,
-            optable: operators::PrecedenceTable::new()
+            optable: operators::PrecedenceTable::new(),
+            file
         }
     }
     
@@ -47,21 +50,36 @@ impl ParseEnvironment {
         match token.class {
             TokenType::Ident => ast::IdentNode::new(&token.string),
             TokenType::Op => {  // Prefix Op.
-                let op = self.optable.lookup(&token.string, 1);
-                if op.is_some() {
+                let is_op = self.optable.exists(&token.string);
+                if is_op {
                     return ast::CallNode::new(ast::IdentNode::new(&token.string), vec![self.expr(300)]);
                 }
-                return panic!("`{}` is not a prefix operator.", token.string);
+                issue!(err::Types::ParseError, self.file, token,
+                    "`{}` is not an operator.", token.string);
             },
             TokenType::Num => ast::NumNode::new(&*token.string),
             TokenType::Str => ast::StrNode::new(&token.string),
-            _ => panic!("Passed non-atomic token to `atom` parser.")
+            TokenType::LParen => {
+                let expr = self.expr(0);
+                self.expect(TokenType::RParen, self.stream.get(0));
+                self.stream.remove(0);
+                expr
+            }
+            _ => issue!(err::Types::ParseError, self.file, token,
+                    "`{}` has no null-denotation.", token.class)
         }
     }
 
     fn expr(&mut self, right_prec : i32) -> Nodes {
         let popped = &self.stream.remove(0);
         let mut left = self.null_den(popped);
+
+        if self.stream.is_empty() { return left; }
+
+        if self.optable.exists(&self.stream[0].string) {
+            return issue!(err::Types::ParseError, self.file, &self.stream[0],
+                "`{}` is not a binary operator.", &self.stream[0].string);
+        }
 
         while self.optable.precedence(&self.stream[0].string).unwrap_or(0) > right_prec {
             if self.stream[0].class == TokenType::EOF { break; }
@@ -74,6 +92,18 @@ impl ParseEnvironment {
     fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {
         let right = self.expr(op.precedence - (if op.is_right() { 1 } else { 0 }));
         ast::CallNode::new(ast::IdentNode::new(op.name), vec![left, right])
+    }
+
+    fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
+        if maybe_t.is_none() {
+            issue!(err::Types::ParseError, self.file, self.stream.last().unwrap(),
+                "Unexpected end of stream.");
+        }
+        let t = maybe_t.unwrap();
+        if t.class != tt {
+            issue!(err::Types::ParseError, self.file, t,
+                "Unexpected token type: `{}`, expected: `{}`.", t.class, tt);
+        }
     }
 }
 

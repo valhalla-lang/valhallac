@@ -100,6 +100,8 @@ impl PrecedenceTable {
             op("unless", 20, Side::Neither, 2),
             op(  ",", 10, Side::Right,   2),        
             op( "=>", 1, Side::Neither, 2),
+            op(  "(", 0, Side::Neither, 1),
+            op(  ")", 0, Side::Neither, 1),
         ]};
         
         table
