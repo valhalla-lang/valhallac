@@ -99,9 +99,9 @@ impl PrecedenceTable {
             op( "if", 20, Side::Neither, 2),
             op("unless", 20, Side::Neither, 2),
             op(  ",", 10, Side::Right,   2),        
-            op( "=>", 1, Side::Neither, 2),
-            op(  "(", 0, Side::Neither, 1),
-            op(  ")", 0, Side::Neither, 1),
+            op( "=>",  1, Side::Neither, 2),
+            op(  "(",  0, Side::Neither, 1),
+            op(  ")",  0, Side::Neither, 1),
         ]};
         
         table
@@ -122,7 +122,7 @@ impl PrecedenceTable {
     }
 
     pub fn exists(&self, name : &str) -> bool {
-        self.table.iter().filter(|o| o.name == name).next().is_some()
+        self.table.iter().filter(|o| o.name == name).nth(0).is_some()
     }
 
     pub fn precedence(&self, name : &str) -> Option<i32> {

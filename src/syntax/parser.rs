@@ -74,9 +74,12 @@ impl ParseEnvironment {
         let popped = &self.stream.remove(0);
         let mut left = self.null_den(popped);
 
-        if self.stream.is_empty() { return left; }
+        if self.stream.is_empty()
+            || self.stream[0].class == TokenType::EOF
+            || self.stream[0].class == TokenType::Term
+            { return left; }
 
-        if self.optable.exists(&self.stream[0].string) {
+        if !self.optable.exists(&self.stream[0].string) {
             return issue!(err::Types::ParseError, self.file, &self.stream[0],
                 "`{}` is not a binary operator.", &self.stream[0].string);
         }
