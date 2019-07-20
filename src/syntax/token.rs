@@ -85,21 +85,12 @@ impl Token {
     /// Checks if the token represents an atomic datum.
     pub fn is_atomic(&self) -> bool {
         match self.class {
-            TokenType::Ident  => true,
-            TokenType::Num    => true,
-            TokenType::Op     => true,
-            TokenType::Sym    => true,
-            TokenType::Str    => true,
-            TokenType::LParen => false,
-            TokenType::RParen => false,
-            TokenType::LBrack => false,
-            TokenType::RBrack => false,
-            TokenType::LBrace => false,
-            TokenType::RBrace => false,
-            TokenType::LVec   => false,
-            TokenType::RVec   => false,
-            TokenType::Term   => false,
-            TokenType::EOF    => false,
+            TokenType::Ident => true,
+            TokenType::Num   => true,
+            TokenType::Op    => true,
+            TokenType::Sym   => true,
+            TokenType::Str   => true,
+            _ => false,
         }
     }
 
