@@ -49,13 +49,13 @@ lazy_static! {
 macro_rules! try_match {
     ($stream:expr, $partial:expr,
      $reg:expr, $token_type:expr,
-     $current_char:expr, $line:expr, $col:expr) => {
+     $current_char_ptr:expr, $line:expr, $col:expr) => {
         if let Some(matched) = $reg.first_match($partial) {
             let span = matched.width() as u32;
             $stream.push(Token::new(
                 $token_type, &matched,
                 location::new($line, $col, span)));
-            $current_char += matched.len();
+            $current_char_ptr += matched.len();
             $col += span;
             continue;
         }
@@ -67,42 +67,64 @@ macro_rules! try_match {
 pub fn lex(string : &str) -> Vec<Token> {
     let mut token_stream : Vec<Token> = Vec::new();
     
-    let mut current_char = 0;
+    let mut current_char_ptr = 0;
     let string_size = string.bytes().count();
 
     let mut partial : &str;
     let mut line = 1;
     let mut col  = 1;
 
-    while current_char < string_size {
-        if let Some(slice) = &string.get(current_char..) {
+    // Step through 
+    while current_char_ptr < string_size {
+        // Align to character boundary.
+        if let Some(slice) = &string.get(current_char_ptr..) {
             partial = slice;
         } else { // Not on boundary yet.
-            current_char += 1;
+            current_char_ptr += 1;
             continue;
         }
 
-        let maybe_vec = &partial.get(0..2).unwrap_or("");
-        let vec_brack = match maybe_vec {
-            &"[|" => Some(TokenType::LVec),
-            &"|]" => Some(TokenType::RVec),
+
+        let two_chars = partial.get(0..2).unwrap_or("\0\0");
+
+        // Consume EON comment:
+        if two_chars.chars().nth(0).unwrap() == '#' || two_chars == "--" {
+            let old_char_ptr = current_char_ptr;
+            current_char_ptr += if two_chars == "--" { 2 } else { 1 };
+            loop {
+                let current_char = string.bytes().nth(current_char_ptr).unwrap_or(b'\0');
+                if current_char == b'\n' || current_char == b'\0' {
+                    break;
+                }
+                current_char_ptr += 1;
+            }
+            col += string.get(old_char_ptr..current_char_ptr)
+                .expect("Comment ended or started not on char boundary.")
+                .width() as u32;
+            
+            continue;
+        }
+
+        let vec_brack = match two_chars {
+            "[|" => Some(TokenType::LVec),
+            "|]" => Some(TokenType::RVec),
               _  => None
         };
         if let Some(tt) = vec_brack {
             token_stream.push(Token::new(
-                tt, maybe_vec,
+                tt, two_chars,
                 location::new(line, col, 2)));
             col += 2;
-            current_char += 2;
+            current_char_ptr += 2;
             continue;
         }
 
-        if *maybe_vec == ": " {
+        if two_chars == ": " {
             token_stream.push(Token::new(
                 TokenType::Op, ":",
                 location::new(line, col, 1)));
             col += 2;
-            current_char += 2;
+            current_char_ptr += 2;
             continue;
         }
 
@@ -130,7 +152,7 @@ pub fn lex(string : &str) -> Vec<Token> {
             } else {
                 col += 1;
             }
-            current_char += 1;
+            current_char_ptr += 1;
             continue;
         }
 
@@ -143,7 +165,7 @@ pub fn lex(string : &str) -> Vec<Token> {
             while !eos {  // Spaghet
                 if let Some(character) = partial.chars().nth(i) {
                     if character == '"' {
-                        current_char += 1;
+                        current_char_ptr += 1;
                         col += 1;
                         eos = true;
                     } else if character == '\\' {
@@ -156,10 +178,10 @@ pub fn lex(string : &str) -> Vec<Token> {
                                 'b' => String::from("\x08"),
                                 '0' => String::from("\0"),
                                 'x' => {
-                                    if let Some(code) = partial.get((current_char + 2)..(current_char + 4)) {
+                                    if let Some(code) = partial.get((current_char_ptr + 2)..(current_char_ptr + 4)) {
                                         i += 2;
                                         col += 2;
-                                        current_char += 2;
+                                        current_char_ptr += 2;
                                         (u8::from_str_radix(code, 16).expect("Malformed hex.") as char).to_string()
                                     } else { String::new() }
                                 }
@@ -167,7 +189,7 @@ pub fn lex(string : &str) -> Vec<Token> {
                             };
                             i += 1;
                             col += 1;
-                            current_char += 1;
+                            current_char_ptr += 1;
                             contents.push_str(&escaped);
                             continue;
                         } else {
@@ -178,7 +200,7 @@ pub fn lex(string : &str) -> Vec<Token> {
                         contents.push(character);
                         i += 1;
                         col += character.width().unwrap_or(2) as u32;
-                        current_char += character.len_utf8();
+                        current_char_ptr += character.len_utf8();
                         continue;
                     }
                 } else {
@@ -186,7 +208,7 @@ pub fn lex(string : &str) -> Vec<Token> {
                     // Error: Unexpected EOS!
                 }
                 i += 1;
-                current_char += 1;
+                current_char_ptr += 1;
                 col += 1;
             }
             token_stream.push(Token::new(
@@ -197,21 +219,21 @@ pub fn lex(string : &str) -> Vec<Token> {
 
         try_match!(token_stream, partial,
             NUM, TokenType::Num,
-            current_char, line, col);
+            current_char_ptr, line, col);
 
         try_match!(token_stream, partial,
             OP, TokenType::Op,
-            current_char, line, col);
+            current_char_ptr, line, col);
 
         try_match!(token_stream, partial,
             IDENT, TokenType::Ident,
-            current_char, line, col);
+            current_char_ptr, line, col);
 
         try_match!(token_stream, partial,
             SYM, TokenType::Sym,
-            current_char, line, col);
+            current_char_ptr, line, col);
 
-        current_char += 1;
+        current_char_ptr += 1;
         if partial.is_char_boundary(0) { col += 1 }
     }
 

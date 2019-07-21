@@ -139,6 +139,8 @@ pub struct BlockNode {
     pub statements : Vec<Nodes>
 }
 
+pub struct EmptyNode;
+
 /// All node types.
 pub enum Nodes {
     Ident(IdentNode),
@@ -146,7 +148,8 @@ pub enum Nodes {
     Str(StrNode),
     Sym(SymNode),
     Call(CallNode),
-    Block(BlockNode)
+    Block(BlockNode),
+    Empty(EmptyNode),
 }
 
 
@@ -161,6 +164,7 @@ impl fmt::Display for Nodes {
                 "%call{{\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
             Nodes::Block(node)  => format!("%block{{ ... }}"),
+            Nodes::Empty(_)     => String::from("()"),
         };
         write!(f, "{}", printable)
     }
@@ -190,8 +194,8 @@ impl Nodes {
             Nodes::Num(_)    => true,
             Nodes::Str(_)    => true,
             Nodes::Sym(_)    => true,
-            Nodes::Call(_)   => false,
-            Nodes::Block(_)  => false,
+            Nodes::Empty(_)  => true,
+            _ => false
         }
     }
 }
@@ -224,6 +228,10 @@ impl CallNode {
     }
 }
 
+impl EmptyNode {
+    pub fn new() -> Nodes { Nodes::Empty(EmptyNode { }) }
+}
+
 /// Root branch of the AST.
 pub struct Root {
     pub branches : Vec<Nodes>
@@ -240,17 +248,17 @@ const TAB : &str = "  ";
 pub fn pretty_print(node : &Nodes, depth : usize) -> String {
     let tab = TAB.repeat(depth);
     let printable = match node {
-            Nodes::Ident(_)  => format!("{}{}", tab, node),
-            Nodes::Num(_)    => format!("{}{}", tab, node),
-            Nodes::Str(_)    => format!("{}{}", tab, node),
-            Nodes::Sym(_)    => format!("{}{}", tab, node),
-            Nodes::Call(n)   => format!(
-                "{tab}%call{{\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operands [|\n{ops}\n{tab}{T}|]\n{tab}}}",
+            Nodes::Call(n) => format!(
+                "{tab}%call{{\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operand [|{op}|]\n{tab}}}",
                 tab=tab, T=TAB,
                 calling=pretty_print(&*n.callee, depth + 2),
-                ops=n.operands.iter().map(|e| pretty_print(e, depth + 2)).collect::<Vec<String>>().join("\n")
+                op=(if n.operands.is_empty() { String::from(" ") } else { format!(
+                    "\n{ops}\n{tab}{T}",
+                    ops=pretty_print(&n.operands[0], depth + 2),
+                    tab=tab, T=TAB) })
             ),
-            Nodes::Block(n)  => format!("%block{{ ... }}"),
+            Nodes::Block(n) => format!("%block{{ ... }}"),
+            _ => format!("{}{}", tab, node)
     };
     printable
 }

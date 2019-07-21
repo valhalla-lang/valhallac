@@ -49,10 +49,19 @@ impl ParseEnvironment {
     fn null_den(&mut self, token : &Token) -> Nodes {
         match token.class {
             TokenType::Ident => ast::IdentNode::new(&token.string),
-            TokenType::Op => {  // Prefix Op.
+            TokenType::Op => {
                 let is_op = self.optable.exists(&token.string);
                 if is_op {
-                    return ast::CallNode::new(ast::IdentNode::new(&token.string), vec![self.expr(300)]);
+                    return match self.stream[0].class {
+                        TokenType::RParen => {
+                            ast::CallNode::new(ast::IdentNode::new(&token.string), vec![])
+                        },
+                        _ => ast::CallNode::new(
+                                ast::CallNode::new(
+                                    ast::IdentNode::new(&token.string),
+                                    vec![]),
+                                vec![self.expr(500)])
+                    };
                 }
                 issue!(err::Types::ParseError, self.file, token,
                     "`{}` is not an operator.", token.string);
@@ -60,6 +69,13 @@ impl ParseEnvironment {
             TokenType::Num => ast::NumNode::new(&*token.string),
             TokenType::Str => ast::StrNode::new(&token.string),
             TokenType::LParen => {
+                let current = self.stream.get(0);
+                if current.is_none() || current.unwrap().class == TokenType::EOF {
+                    self.expect(TokenType::RParen, current)
+                } else if current.unwrap().class == TokenType::RParen {
+                    self.stream.remove(0);
+                    return ast::EmptyNode::new();
+                }
                 let expr = self.expr(0);
                 self.expect(TokenType::RParen, self.stream.get(0));
                 self.stream.remove(0);
@@ -93,8 +109,12 @@ impl ParseEnvironment {
     }
 
     fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {
+        let first_appl = ast::CallNode::new(ast::IdentNode::new(op.name), vec![left]);
+        if self.stream[0].class == TokenType::RParen {
+            return first_appl;
+        }
         let right = self.expr(op.precedence - (if op.is_right() { 1 } else { 0 }));
-        ast::CallNode::new(ast::IdentNode::new(op.name), vec![left, right])
+        ast::CallNode::new(first_appl, vec![right])
     }
 
     fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
