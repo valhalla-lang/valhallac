@@ -6,7 +6,7 @@ use super::err;
 use token::{Token, TokenType};
 use ast::{Nodes, Numerics};
 
-pub fn parse(stream : Vec<Token>, file : &'static str) -> ast::Root {
+pub fn parse(stream : Vec<Token>, file : &str) -> ast::Root {
     let mut environment = ParseEnvironment::new(stream, file);
     environment.optable.new_fun("max", 4);
 
@@ -15,15 +15,15 @@ pub fn parse(stream : Vec<Token>, file : &'static str) -> ast::Root {
     environment.root
 }
 
-struct ParseEnvironment {
+struct ParseEnvironment<'a> {
     pub root : ast::Root,
     pub stream : Vec<Token>,
-    pub optable : operators::PrecedenceTable,
-    pub file : &'static str
+    pub optable : operators::PrecedenceTable<'a>,
+    pub file : &'a str
 }
 
-impl ParseEnvironment {
-    pub fn new(stream : Vec<Token>, file : &'static str) -> Self {
+impl<'a> ParseEnvironment<'a> {
+    pub fn new(stream : Vec<Token>, file : &'a str) -> Self {
         ParseEnvironment {
             root: ast::Root::new(),
             stream: stream,
@@ -48,23 +48,28 @@ impl ParseEnvironment {
 
     fn null_den(&mut self, token : &Token) -> Nodes {
         match token.class {
-            TokenType::Ident => ast::IdentNode::new(&token.string),
-            TokenType::Op => {
+            TokenType::Op | TokenType::Ident => {
                 let is_op = self.optable.exists(&token.string);
                 if is_op {
-                    return match self.stream[0].class {
-                        TokenType::RParen => {
-                            ast::CallNode::new(ast::IdentNode::new(&token.string), vec![])
-                        },
-                        _ => ast::CallNode::new(
-                                ast::CallNode::new(
-                                    ast::IdentNode::new(&token.string),
-                                    vec![]),
-                                vec![self.expr(500)])
-                    };
+                    let prefix = self.optable.lookup(&token.string, 1);
+                    if prefix.is_none() {
+                        return match self.stream[0].class {
+                            TokenType::RParen => {
+                                ast::CallNode::new(ast::IdentNode::new(&token.string), vec![])
+                            },
+                            _ => ast::CallNode::new(
+                                    ast::CallNode::new(
+                                        ast::IdentNode::new(&token.string),
+                                        vec![ast::EmptyNode::new()]),
+                                    vec![self.expr(500)])
+                        };
+                    } else {  // It is a prefix unary operator.
+                        return ast::CallNode::new(
+                            ast::IdentNode::new(&token.string),
+                            vec![self.expr(500)]);
+                    }
                 }
-                issue!(err::Types::ParseError, self.file, token,
-                    "`{}` is not an operator.", token.string);
+                ast::IdentNode::new(&token.string)
             },
             TokenType::Num => ast::NumNode::new(&*token.string),
             TokenType::Str => ast::StrNode::new(&token.string),
@@ -95,17 +100,39 @@ impl ParseEnvironment {
             || self.stream[0].class == TokenType::Term
             { return left; }
 
-        if !self.optable.exists(&self.stream[0].string) {
-            return issue!(err::Types::ParseError, self.file, &self.stream[0],
-                "`{}` is not a binary operator.", &self.stream[0].string);
-        }
 
-        while self.optable.precedence(&self.stream[0].string).unwrap_or(0) > right_prec {
-            if self.stream[0].class == TokenType::EOF { break; }
-            let op = self.optable.lookup(&self.stream.remove(0).string, 2).unwrap();
-            left = self.left_den(left, op.clone());
+        while self.optable.precedence(&self.stream[0].string).unwrap_or(190) > right_prec {
+            let next = &(&self.stream[0].string).clone();
+
+            if next == "\0" || next == "\n" || next == ")" { break; }
+
+            let maybe_op = self.optable.lookup(next, 2);
+            if let Some(op) = maybe_op {
+                self.stream.remove(0);
+                let cloned = operators::Operator::new(next, op.precedence, op.associativity, 2);
+                left = self.left_den(left, cloned);
+            } else {  // Function call.
+                let mut pushed = false;
+                match left {
+                    Nodes::Call(ref mut call) => {
+                        if call.operands.is_empty() {
+                            call.operands.push(self.expr(190));
+                            pushed = true;
+                        }
+                    }
+                    _ => ()
+                };
+                if !pushed {
+                    left = self.func_appl(left);
+                }
+            }
         }
         return left;
+    }
+
+    fn func_appl(&mut self, left : Nodes) -> Nodes {
+        println!("Creating function call with:\n --> {}", left);
+        ast::CallNode::new(left, vec![self.expr(190)])
     }
 
     fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {

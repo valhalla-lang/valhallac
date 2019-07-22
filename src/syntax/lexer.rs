@@ -42,7 +42,7 @@ const IDENT_CHARS : &str = r"\p{L}\?!'\-_";
 lazy_static! {
     static ref OP    : Regex = re!(r"\A([,\+\.\*\|\\/\&%\$\^\~<¬=@>\-]+|:{2,})");
     static ref IDENT : Regex = re!(&format!(r"\A([{id}][{id}\p{{N}}]*)", id=IDENT_CHARS));
-    static ref SYM   : Regex = re!(&format!(r"\A(:[{id}\p{{N}}]+)", id=IDENT_CHARS));
+    static ref SYM   : Regex = re!(r"\A(:[^\s]+)");
     static ref NUM   : Regex = re!(r"\A(\-?(?:(?:0[xX][0-9a-f]+)|(?:0[bB][01]+)|(?:0[Oo][0-7]+)|(?:(?:[0-9]+(?:\.[0-9]+)?(?:e[\+\-]?[0-9]+)?))))");
 }
 

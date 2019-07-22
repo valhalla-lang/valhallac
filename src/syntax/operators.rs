@@ -10,16 +10,16 @@ pub enum Side {
 /// - Its precedence (as an i32), the higher the int, the higher the precedence.
 /// - Associativity, which can either be left, right, or no associativity.
 /// - The number of arguments it takes / its arity. Either one, or two.
-#[derive(Copy, Clone)]
-pub struct Operator {
-    pub name : &'static str,
+#[derive(Clone, Copy)]
+pub struct Operator<'a> {
+    pub name : &'a str,
     pub precedence : i32,
     pub associativity : Side,
     pub arity : i32,
 }
 
-impl Operator {
-    pub fn new(name : &'static str, precedence : i32, associativity : Side, arity : i32) -> Self {
+impl<'a> Operator<'a> {
+    pub fn new(name : &'a str, precedence : i32, associativity : Side, arity : i32) -> Self {
         Operator {
             name: name.clone(),
             precedence,
@@ -46,8 +46,8 @@ impl Operator {
 }
 
 /// Wrapper for table of known operators.
-pub struct PrecedenceTable {
-    pub table : Vec<Operator>
+pub struct PrecedenceTable<'a> {
+    pub table : Vec<Operator<'a>>
 }
 
 #[macro_export]
@@ -57,7 +57,7 @@ macro_rules! push_op {
     };
 }
 
-impl PrecedenceTable {
+impl<'a> PrecedenceTable<'a> {
     pub fn new() -> Self {
         let op = Operator::new;
         let table = PrecedenceTable { table: vec![
@@ -107,18 +107,18 @@ impl PrecedenceTable {
         table
     }
 
-    pub fn new_op(&mut self, name : &'static str, prec : i32, assoc : Side, arity : i32) -> Operator {
+    pub fn new_op(&mut self, name : &'a str, prec : i32, assoc : Side, arity : i32) -> Operator {
         let op = Operator::new(name, prec, assoc, arity);
         self.table.push(op);
         op
     }
 
-    pub fn new_fun(&mut self, name : &'static str, max_arity : i32) -> Operator {
+    pub fn new_fun(&mut self, name : &'a str, max_arity : i32) -> Operator {
         self.new_op(name, 19, Side::Neither, max_arity)
     }
 
     pub fn lookup(&self, name : &str, arity : i32) -> Option<&Operator> {
-        self.table.iter().filter(|o| o.name == name && o.arity == arity).next()
+        self.table.iter().filter(|o| o.name == name && o.arity == arity).nth(0)
     }
 
     pub fn exists(&self, name : &str) -> bool {

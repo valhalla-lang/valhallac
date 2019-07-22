@@ -4,6 +4,24 @@
 
 # Valhalla Language
 
+## IN DEVELOPMENT
+
+What's been done so far on the front end:
+- [ ] Parser
+  - [x] Lexical analysis, full UTF-8 support, handling: identifiers, symbols, numbers, strings (utf-8 with good number of escapes), all sorts of braces for vectors, sets, grouping, etc.
+  - [x] Infix, prefix and suffix notation.
+  - [x] Correct parsing of precedence, arity and associativity.
+  - [x] The base operators for the language.
+  - [x] Proper function calls, Currying is properly implemented for functions (Haskell-like syntax).
+  - [x] (Cool) error messages, with line and column number and read-out of the line.
+  - [ ] Macros (incl. macro definitions and macro application).
+- [ ] Compiler (generating bytecode to assemble an executable file).
+
+The VM, i.e. the backend for the language, is being developed independently
+and will have its own progress and check-list updates.
+
+### Description
+
 This repository contains the front-end (parser and
 bytecode compilation) which understands the syntax and
 semantics, as well as doing static type analysis and code

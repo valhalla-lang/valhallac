@@ -30,7 +30,7 @@ use token::ShowStream;
 
 /// Parses a given file, calling various methods from
 /// the `syntax` sub-module.
-pub fn parse_file(filename : &'static str) {
+pub fn parse_file(filename : &str) {
     let code = fs::read_to_string(filename)
         .expect("Could not open file for reading.");
     println!("Code:\n{}\n", code);
