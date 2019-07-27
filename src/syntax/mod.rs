@@ -8,14 +8,14 @@ mod location;
 mod token;
 
 /// Abstract Syntax Tree nodes and methods.
-mod ast;
+pub mod ast;
 
 /// Dealing with associativity and precedence.
 mod operators;
 
 /// Error messages.
 #[macro_use]
-mod err;
+pub mod err;
 
 /// Lexer splits code up into a token-stream
 /// of relevant lexical tokens, making the

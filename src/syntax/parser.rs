@@ -19,7 +19,9 @@ struct ParseEnvironment<'a> {
     pub root : ast::Root,
     pub stream : Vec<Token>,
     pub optable : operators::PrecedenceTable<'a>,
-    pub file : &'a str
+    pub file : &'a str,
+    
+    ignore_newline : bool
 }
 
 impl<'a> ParseEnvironment<'a> {
@@ -28,7 +30,9 @@ impl<'a> ParseEnvironment<'a> {
             root: ast::Root::new(),
             stream: stream,
             optable: operators::PrecedenceTable::new(),
-            file
+            file,
+
+            ignore_newline: false
         }
     }
     
@@ -43,6 +47,12 @@ impl<'a> ParseEnvironment<'a> {
             let e = self.expr(0);
             self.root.branches.push(e);
             current = self.stream.get(0);
+        }
+    }
+
+    fn skip_newlines(&mut self) {
+        while !self.stream.is_empty() && self.stream[0].string == "\n" {
+                    self.stream.remove(0);
         }
     }
 
@@ -73,6 +83,7 @@ impl<'a> ParseEnvironment<'a> {
             },
             TokenType::Num => ast::NumNode::new(&*token.string),
             TokenType::Str => ast::StrNode::new(&token.string),
+            TokenType::Sym => ast::SymNode::new(&token.string),
             TokenType::LParen => {
                 let current = self.stream.get(0);
                 if current.is_none() || current.unwrap().class == TokenType::EOF {
@@ -81,7 +92,13 @@ impl<'a> ParseEnvironment<'a> {
                     self.stream.remove(0);
                     return ast::EmptyNode::new();
                 }
+
+                
+                self.ignore_newline = true;
+                self.skip_newlines();
                 let expr = self.expr(0);
+                self.skip_newlines();
+                self.ignore_newline = false;
                 self.expect(TokenType::RParen, self.stream.get(0));
                 self.stream.remove(0);
                 expr
@@ -92,9 +109,13 @@ impl<'a> ParseEnvironment<'a> {
     }
 
     fn expr(&mut self, right_prec : i32) -> Nodes {
-        let popped = &self.stream.remove(0);
-        let mut left = self.null_den(popped);
+        let mut popped = self.stream.remove(0);
+        while !self.stream.is_empty() && self.ignore_newline && popped.string == "\n" {
+            popped = self.stream.remove(0);
+        }
+        let mut left = self.null_den(&popped);
 
+        if self.ignore_newline { self.skip_newlines(); }
         if self.stream.is_empty()
             || self.stream[0].class == TokenType::EOF
             || self.stream[0].class == TokenType::Term
@@ -104,6 +125,10 @@ impl<'a> ParseEnvironment<'a> {
         while self.optable.precedence(&self.stream[0].string).unwrap_or(190) > right_prec {
             let next = &(&self.stream[0].string).clone();
 
+            if self.ignore_newline && next == "\n" {
+                self.stream.remove(0);    
+                continue;
+            }
             if next == "\0" || next == "\n" || next == ")" { break; }
 
             let maybe_op = self.optable.lookup(next, 2);
@@ -112,36 +137,34 @@ impl<'a> ParseEnvironment<'a> {
                 let cloned = operators::Operator::new(next, op.precedence, op.associativity, 2);
                 left = self.left_den(left, cloned);
             } else {  // Function call.
-                let mut pushed = false;
-                match left {
-                    Nodes::Call(ref mut call) => {
-                        if call.operands.is_empty() {
-                            call.operands.push(self.expr(190));
-                            pushed = true;
-                        }
-                    }
-                    _ => ()
-                };
-                if !pushed {
-                    left = self.func_appl(left);
-                }
+                left = self.func_apply(left);
             }
         }
         return left;
     }
 
-    fn func_appl(&mut self, left : Nodes) -> Nodes {
-        println!("Creating function call with:\n --> {}", left);
+    fn func_apply(&mut self, mut left : Nodes) -> Nodes {
+        let mut pushed = false;
+        match left {
+            Nodes::Call(ref mut call) => {
+                if call.operands.is_empty() {
+                    call.operands.push(self.expr(190));
+                    pushed = true;
+                }
+            },
+            _ => ()
+        };
+        if pushed { return left; }
         ast::CallNode::new(left, vec![self.expr(190)])
     }
 
     fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {
-        let first_appl = ast::CallNode::new(ast::IdentNode::new(op.name), vec![left]);
+        let first_apply = ast::CallNode::new(ast::IdentNode::new(op.name), vec![left]);
         if self.stream[0].class == TokenType::RParen {
-            return first_appl;
+            return first_apply;
         }
         let right = self.expr(op.precedence - (if op.is_right() { 1 } else { 0 }));
-        ast::CallNode::new(first_appl, vec![right])
+        ast::CallNode::new(first_apply, vec![right])
     }
 
     fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
