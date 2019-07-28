@@ -1,4 +1,4 @@
-<p align="center">	
+<p align="center">
   <img alt="Valhalla Flag" height=230 src="https://github.com/Demonstrandum/valhalla/raw/master/assets/logo.svg.png" />
 </p>
 
@@ -16,6 +16,8 @@ What's been done so far on the front end:
   - [x] (Cool) error messages, with line and column number and read-out of the line.
   - [ ] Macros (incl. macro definitions and macro application).
 - [ ] Compiler (generating bytecode to assemble an executable file).
+  - [x] Table of constants and locals with basic PUSH & POP
+        instructions as well as basic arithmetic.
 
 The VM, i.e. the backend for the language, is being developed independently
 and will have its own progress and check-list updates.
