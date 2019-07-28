@@ -66,7 +66,7 @@ macro_rules! try_match {
 /// the generated token-stream (as a Vec<Token>).
 pub fn lex(string : &str) -> Vec<Token> {
     let mut token_stream : Vec<Token> = Vec::new();
-    
+
     let mut current_char_ptr = 0;
     let string_size = string.bytes().count();
 
@@ -74,7 +74,7 @@ pub fn lex(string : &str) -> Vec<Token> {
     let mut line = 1;
     let mut col  = 1;
 
-    // Step through 
+    // Step through
     while current_char_ptr < string_size {
         // Align to character boundary.
         if let Some(slice) = &string.get(current_char_ptr..) {
@@ -101,7 +101,7 @@ pub fn lex(string : &str) -> Vec<Token> {
             col += string.get(old_char_ptr..current_char_ptr)
                 .expect("Comment ended or started not on char boundary.")
                 .width() as u32;
-            
+
             continue;
         }
 

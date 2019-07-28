@@ -1,4 +1,4 @@
-use super::token;
+use crate::syntax::token;
 
 use std::fs;
 use std::fmt;
@@ -8,14 +8,16 @@ pub enum Types {
     LexError,
     ParseError,
     TypeError,
+    CompError,
 }
 
 impl fmt::Display for Types {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match *self {
-            Types::LexError => "Lexicographical Error",
-            Types::ParseError => "Grammar Error",
-            Types::TypeError => "Typing Error"
+            Types::LexError   => "Lexicographical Error",
+            Types::ParseError =>         "Grammar Error",
+            Types::TypeError  =>          "Typing Error",
+            Types::CompError  =>     "Compilation Error",
         };
         write!(f, "{}", printable)
     }
@@ -39,13 +41,13 @@ pub fn issue(class : Types, filename : &str, token : &token::Token,  message : &
 macro_rules! issue {
     ($type:path, $file:expr, $token:expr, $message:expr) => {
         {
-            super::err::issue($type, $file, $token, $message);
+            err::issue($type, $file, $token, $message);
             std::process::exit(1)
         }
     };
     ($type:path, $file:expr, $token:expr, $message:expr, $($form:expr),*) => {
         {
-            super::err::issue($type, $file, $token, &format!($message, $($form),*));
+            err::issue($type, $file, $token, &format!($message, $($form),*));
             std::process::exit(1)
         }
     };

@@ -126,7 +126,7 @@ pub struct SymNode {
 /// Call Node has a pointer to the callee node
 /// and a list of operand nodes.
 pub struct CallNode {
-    /// Pointer to heap allocated calling node. 
+    /// Pointer to heap allocated calling node.
     pub callee : Box<Nodes>,
     /// Pointer to list of operand nodes.
     pub operands : Vec<Nodes>
@@ -159,7 +159,7 @@ impl fmt::Display for Nodes {
             Nodes::Ident(node)  => format!("%ident{{ :value \"{}\" }}", node.value),
             Nodes::Num(node)    => format!("%num{{ :value {} }}", node.value),
             Nodes::Str(node)    => format!("%str{{ :value \"{}\" }}", node.value),
-            Nodes::Sym(node)    => format!("%sym{{ :value \"{}\" }}", node.value),
+            Nodes::Sym(node)    => format!("%sym{{ :value \":{}\" }}", node.value),
             Nodes::Call(node)   => format!(
                 "%call{{\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
@@ -190,11 +190,18 @@ impl Nodes {
 
     pub fn is_atomic(&self) -> bool {
         match self {
-            Nodes::Ident(_)  => true,
-            Nodes::Num(_)    => true,
-            Nodes::Str(_)    => true,
-            Nodes::Sym(_)    => true,
-            Nodes::Empty(_)  => true,
+            Nodes::Ident(_)
+            | Nodes::Num(_)
+            | Nodes::Str(_)
+            | Nodes::Sym(_)
+            | Nodes::Empty(_)  => true,
+            _ => false
+        }
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        match self {
+            Nodes::Num(_)=> true,
             _ => false
         }
     }
@@ -216,7 +223,7 @@ impl StrNode {
 }
 
 impl SymNode {
-    pub fn new(value : &str) -> Nodes { Nodes::Sym(SymNode { value: value.to_string() }) }
+    pub fn new(value : &str) -> Nodes { Nodes::Sym(SymNode { value: value[1..].to_string() }) }
 }
 
 impl CallNode {
@@ -225,6 +232,15 @@ impl CallNode {
             callee: Box::new(callee),
             operands: operands,
         })
+    }
+
+    pub fn is_unary(&self) -> bool {
+        self.callee.ident().is_some() && !self.operands.is_empty()
+    }
+
+    pub fn is_binary(&self) -> bool {
+        let sub_call = self.callee.call();
+        sub_call.is_some() && !self.operands.is_empty() && sub_call.unwrap().is_unary()
     }
 }
 
@@ -243,7 +259,7 @@ impl Root {
     }
 }
 
-const TAB : &str = "  "; 
+const TAB : &str = "  ";
 
 pub fn pretty_print(node : &Nodes, depth : usize) -> String {
     let tab = TAB.repeat(depth);

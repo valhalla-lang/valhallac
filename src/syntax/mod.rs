@@ -2,20 +2,16 @@
 
 /// location manages line and column location of
 /// lexical tokens as well as their span.
-mod location;
+pub mod location;
 
 /// Provides token classes and methods
-mod token;
+pub mod token;
 
 /// Abstract Syntax Tree nodes and methods.
 pub mod ast;
 
 /// Dealing with associativity and precedence.
 mod operators;
-
-/// Error messages.
-#[macro_use]
-pub mod err;
 
 /// Lexer splits code up into a token-stream
 /// of relevant lexical tokens, making the
@@ -30,7 +26,7 @@ use token::ShowStream;
 
 /// Parses a given file, calling various methods from
 /// the `syntax` sub-module.
-pub fn parse_file(filename : &str) {
+pub fn parse_file(filename : &str) -> ast::Root {
     let code = fs::read_to_string(filename)
         .expect("Could not open file for reading.");
     println!("Code:\n{}\n", code);
@@ -40,4 +36,5 @@ pub fn parse_file(filename : &str) {
 
     let tree = parser::parse(stream, filename);
     println!("AST:\n{}\n", tree);
+    tree
 }

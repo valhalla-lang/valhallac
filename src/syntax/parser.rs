@@ -1,7 +1,9 @@
 use super::token;
 use super::ast;
 use super::operators;
-use super::err;
+
+#[macro_use]
+use super::super::err;
 
 use token::{Token, TokenType};
 use ast::{Nodes, Numerics};
@@ -20,7 +22,7 @@ struct ParseEnvironment<'a> {
     pub stream : Vec<Token>,
     pub optable : operators::PrecedenceTable<'a>,
     pub file : &'a str,
-    
+
     ignore_newline : bool
 }
 
@@ -35,7 +37,7 @@ impl<'a> ParseEnvironment<'a> {
             ignore_newline: false
         }
     }
-    
+
     pub fn start(&mut self) {
         let mut current = self.stream.first();
         while current.is_some() && current.unwrap().class != TokenType::EOF {
@@ -93,7 +95,7 @@ impl<'a> ParseEnvironment<'a> {
                     return ast::EmptyNode::new();
                 }
 
-                
+
                 self.ignore_newline = true;
                 self.skip_newlines();
                 let expr = self.expr(0);
@@ -126,7 +128,7 @@ impl<'a> ParseEnvironment<'a> {
             let next = &(&self.stream[0].string).clone();
 
             if self.ignore_newline && next == "\n" {
-                self.stream.remove(0);    
+                self.stream.remove(0);
                 continue;
             }
             if next == "\0" || next == "\n" || next == ")" { break; }
@@ -194,7 +196,7 @@ mod test {
         assert_eq!(ast::NumNode::new(-2).num().unwrap().value, Numerics::Integer(-2isize));
         assert_eq!(ast::NumNode::new(-2i32).num().unwrap().value, Numerics::Integer(-2isize));
         assert_eq!(ast::NumNode::new(-2isize).num().unwrap().value, Numerics::Integer(-2isize));
-        
+
         assert_eq!(ast::NumNode::new(-2.62).num().unwrap().value, Numerics::Real(-2.62f64));
         assert_eq!(ast::NumNode::new(2.62).num().unwrap().value, Numerics::Real(2.62f64));
 

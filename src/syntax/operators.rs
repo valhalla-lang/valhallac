@@ -37,12 +37,6 @@ impl<'a> Operator<'a> {
     pub fn is_unary(&self) -> bool { self.has_arity(1)  }
 
     pub fn is_binary(&self) -> bool { self.has_arity(2) }
-
-    pub fn is_variable(&self) -> bool { self.has_arity(0) }
-
-    pub fn is_func(&self) -> bool {
-        self.precedence == 190 && self.arity >= 1
-    }
 }
 
 /// Wrapper for table of known operators.
@@ -98,12 +92,12 @@ impl<'a> PrecedenceTable<'a> {
             op(  "=", 30, Side::Right,   2),
             op( "if", 20, Side::Neither, 2),
             op("unless", 20, Side::Neither, 2),
-            op(  ",", 10, Side::Right,   2),        
+            op(  ",", 10, Side::Right,   2),
             op( "=>",  1, Side::Neither, 2),
             op(  "(",  0, Side::Neither, 1),
             op(  ")",  0, Side::Neither, 1),
         ]};
-        
+
         table
     }
 
