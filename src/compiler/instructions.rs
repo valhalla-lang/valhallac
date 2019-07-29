@@ -53,7 +53,9 @@ pub enum Operators {
     R_DIV       = 55,
     U_DIV       = 56,
 
-    NOP = 255
+    // Misc- / Meta-codes
+    SET_LINE = 254,
+    NOP = 255,
 }
 
 
@@ -90,6 +92,8 @@ impl fmt::Display for Operators {
             Operators::I_DIV       => "I_DIV\n",
             Operators::R_DIV       => "R_DIV\n",
             Operators::U_DIV       => "U_DIV\n",
+
+            Operators::SET_LINE    => "SET_LINE",
 
             _ => "INVALID_OPCODE\n"
         };

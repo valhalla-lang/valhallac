@@ -2,7 +2,6 @@ use super::token;
 use super::ast;
 use super::operators;
 
-
 use super::super::err;
 
 use token::{Token, TokenType};
@@ -23,7 +22,8 @@ struct ParseEnvironment<'a> {
     pub optable : operators::PrecedenceTable<'a>,
     pub file : &'a str,
 
-    ignore_newline : bool
+    ignore_newline : bool,
+    line_number : usize,
 }
 
 impl<'a> ParseEnvironment<'a> {
@@ -34,7 +34,8 @@ impl<'a> ParseEnvironment<'a> {
             optable: operators::PrecedenceTable::new(),
             file,
 
-            ignore_newline: false
+            ignore_newline: false,
+            line_number: 0,
         }
     }
 
@@ -42,7 +43,7 @@ impl<'a> ParseEnvironment<'a> {
         let mut current = self.stream.first();
         while current.is_some() && current.unwrap().class != TokenType::EOF {
             if current.unwrap().class == TokenType::Term {
-                self.stream.remove(0);
+                self.shift();
                 current = self.stream.get(0);
                 continue;
             }
@@ -52,9 +53,18 @@ impl<'a> ParseEnvironment<'a> {
         }
     }
 
+    fn shift(&mut self) -> Token {
+        let shifted = self.stream.remove(0);
+        if shifted.location.line as usize != self.line_number {
+            self.line_number = shifted.location.line as usize;
+            self.root.branches.push(ast::LineNode::new(self.line_number));
+        }
+        shifted
+    }
+
     fn skip_newlines(&mut self) {
         while !self.stream.is_empty() && self.stream[0].string == "\n" {
-            self.stream.remove(0);
+            self.shift();
         }
     }
 
@@ -93,7 +103,7 @@ impl<'a> ParseEnvironment<'a> {
                 if current.is_none() || current.unwrap().class == TokenType::EOF {
                     self.expect(TokenType::RParen, current)
                 } else if current.unwrap().class == TokenType::RParen {
-                    self.stream.remove(0);
+                    self.shift();
                     return ast::EmptyNode::new();
                 }
 
@@ -104,7 +114,7 @@ impl<'a> ParseEnvironment<'a> {
                 self.skip_newlines();
                 self.ignore_newline = false;
                 self.expect(TokenType::RParen, self.stream.get(0));
-                self.stream.remove(0);
+                self.shift();
                 expr
             }
             _ => issue!(err::Types::ParseError, self.file, token,
@@ -113,9 +123,9 @@ impl<'a> ParseEnvironment<'a> {
     }
 
     fn expr(&mut self, right_prec : i32) -> Nodes {
-        let mut popped = self.stream.remove(0);
+        let mut popped = self.shift();
         while !self.stream.is_empty() && self.ignore_newline && popped.string == "\n" {
-            popped = self.stream.remove(0);
+            popped = self.shift();
         }
         let mut left = self.null_den(&popped);
 
@@ -130,15 +140,15 @@ impl<'a> ParseEnvironment<'a> {
             let next = &(&self.stream[0].string).clone();
 
             if self.ignore_newline && next == "\n" {
-                self.stream.remove(0);
+                self.shift();
                 continue;
             }
             if next == "\0" || next == "\n" || next == ")" { break; }
 
             let maybe_op = self.optable.lookup(next, 2);
             if let Some(op) = maybe_op {
-                self.stream.remove(0);
                 let cloned = operators::Operator::new(next, op.precedence, op.associativity, 2);
+                self.shift();
                 left = self.left_den(left, cloned);
             } else {  // Function call.
                 left = self.func_apply(left);

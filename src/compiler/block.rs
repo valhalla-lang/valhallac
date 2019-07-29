@@ -1,4 +1,7 @@
 use std::fmt;
+use std::collections::HashMap;
+
+use super::super::err;
 
 use super::super::syntax;
 use syntax::ast;
@@ -28,18 +31,27 @@ pub fn numerics_to_element<'a>(num : &ast::Numerics) -> Element<'a> {
 #[derive(Clone, PartialEq)]
 pub struct LocalBlock<'a> {
     pub name : &'a str,
+    filename : &'a str,
     constants : Vec<Element<'a>>,
     locals : Vec<Element<'a>>,
-    instructions : Vec<Instr>
+    instructions : Vec<Instr>,
+
+    // Used only for compilation:
+    locals_map : HashMap<String, usize>,
+    current_line : usize,
 }
 
 impl<'a> LocalBlock<'a> {
-    pub fn new(name : &'a str) -> Self {
+    pub fn new(name : &'a str, filename : &'a str) -> Self {
         LocalBlock {
             name,
+            filename,
             constants: vec![],
             locals: vec![],
-            instructions: vec![]
+            instructions: vec![],
+
+            locals_map: HashMap::new(),
+            current_line: 0,
         }
     }
 
@@ -51,6 +63,18 @@ impl<'a> LocalBlock<'a> {
 
     fn emit(&mut self, node : &'a ast::Nodes) {
         match node {
+            ast::Nodes::Line(line_node) => {
+                self.current_line = line_node.line;
+                self.instructions.push(Instr::Operator(Operators::SET_LINE as u8));
+                self.instructions.push(Instr::Operand(self.current_line as u16));
+            }
+            ast::Nodes::Ident(ident_node) => {
+                let s = &ident_node.value;
+                if !self.locals_map.contains_key(s) {
+                    issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                        "Trying to use unbound local variable `{}`.", s);
+                }
+            },
             ast::Nodes::Num(num_node) => {
                 self.push_const_instr(numerics_to_element(&num_node.value));
             },

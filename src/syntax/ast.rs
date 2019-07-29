@@ -223,6 +223,11 @@ pub struct BlockNode {
 }
 
 #[derive(Clone)]
+pub struct LineNode {
+    pub line : usize
+}
+
+#[derive(Clone)]
 pub struct EmptyNode;
 
 /// All base types, determined at compile time.
@@ -243,6 +248,7 @@ pub enum Nodes {
     Sym(SymNode),
     Call(CallNode),
     Block(BlockNode),
+    Line(LineNode),
     Empty(EmptyNode),
 }
 
@@ -258,6 +264,7 @@ impl fmt::Display for Nodes {
                 "%call{{\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
             Nodes::Block(node)  => format!("%block{{ ... }}"),
+            Nodes::Line(node)   => format!("%newline{{ :line {} }}", node.line),
             Nodes::Empty(_)     => String::from("()"),
         };
         write!(f, "{}", printable)
@@ -352,6 +359,10 @@ impl CallNode {
         let sub_call = self.callee.call();
         sub_call.is_some() && !self.operands.is_empty() && sub_call.unwrap().is_unary()
     }
+}
+
+impl LineNode {
+    pub fn new(line : usize) -> Nodes { Nodes::Line(LineNode { line }) }
 }
 
 impl EmptyNode {

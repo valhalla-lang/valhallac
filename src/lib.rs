@@ -16,7 +16,7 @@ pub mod compiler;
 
 pub fn parse(filename : &str) {
     let root = syntax::parse_file(filename);
-    let mut code_block = compiler::block::LocalBlock::new("<main>");
+    let mut code_block = compiler::block::LocalBlock::new("<main>", filename);
 
 
     code_block.generate(&root.branches);

@@ -46,7 +46,6 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
 }
 
 pub fn replace(root : &mut ast::Root) {
-    println!("start replace");
     let length = root.branches.len();
     let mut i = 0;
     while i < length {
@@ -59,5 +58,4 @@ pub fn replace(root : &mut ast::Root) {
         } // END TOP-LEVEL CONSTANT FOLD
         i += 1;
     }
-    println!("end replace");
 }
