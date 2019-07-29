@@ -7,6 +7,7 @@ use std::io::{BufRead, BufReader};
 use colored;
 use colored::*;
 
+#[allow(non_camel_case_types)]
 pub struct NO_TOKEN;
 
 pub enum Types {

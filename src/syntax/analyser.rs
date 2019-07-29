@@ -5,6 +5,24 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
     if node.call().is_some() && node.call().unwrap().is_binary() {
         let operation = node.call().unwrap().callee.call().unwrap().callee.ident();
         if let Some(op) = operation {
+            match op.value.as_str() {
+                "+" | "-" | "*" | "/" => (),
+                _ => {
+                    let mut new_call = *node.call().unwrap().callee.clone();
+                    let mut new_op   = node.call().unwrap().operands[0].clone();
+
+                    let maybe_call = constant_fold(&new_call);
+                    let maybe_op   = constant_fold(&new_op);
+
+                    if let Some(call) = maybe_call {
+                        new_call = call;
+                    }
+                    if maybe_op.is_some() {
+                        new_op = maybe_op.unwrap();
+                    }
+                    return Some(ast::CallNode::new(new_call, vec![new_op]));
+                }
+            }
             let right = node.call().unwrap().operands.get(0);
             let left = node.call().unwrap().callee.call().unwrap().operands.get(0);
 
@@ -12,8 +30,8 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
             || right.is_none()
             { return None; }
 
-            let mut l_value = ast::Numerics::Natural(0);
-            let mut r_value = ast::Numerics::Natural(0);
+            let l_value;
+            let r_value;
 
             if left.unwrap().num().is_some()
             && right.unwrap().num().is_some() {
@@ -31,15 +49,14 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
                 l_value = foldl.unwrap().num().unwrap().value;
                 r_value = foldr.unwrap().num().unwrap().value;
             }
-            return Some(ast::Nodes::Num(ast::NumNode {
-                value: match op.value.as_str() {
-                    "+" => l_value + r_value,
-                    "-" => l_value - r_value,
-                    "*" => l_value * r_value,
-                    "/" => l_value / r_value,
-                    _ => ast::Numerics::Natural(0)
-                }
-            }));
+            let value = match op.value.as_str() {
+                "+" => l_value + r_value,
+                "-" => l_value - r_value,
+                "*" => l_value * r_value,
+                "/" => l_value / r_value,
+                _ => return None
+            };
+            return Some(ast::Nodes::Num(ast::NumNode { value }));
         }
     }
     None
@@ -52,8 +69,8 @@ pub fn replace(root : &mut ast::Root) {
         let node = &root.branches[i];
         { // START TOP-LEVEL CONSTANT FOLD
             let new = constant_fold(node);
-            if let Some(nbranch) = new {
-                root.branches[i] = nbranch;
+            if let Some(branch) = new {
+                root.branches[i] = branch;
             }
         } // END TOP-LEVEL CONSTANT FOLD
         i += 1;

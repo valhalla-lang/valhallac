@@ -5,7 +5,7 @@ use super::operators;
 use super::super::err;
 
 use token::{Token, TokenType};
-use ast::{Nodes, Numerics};
+use ast::Nodes;
 
 pub fn parse(stream : Vec<Token>, file : &str) -> ast::Root {
     let mut environment = ParseEnvironment::new(stream, file);
@@ -56,6 +56,10 @@ impl<'a> ParseEnvironment<'a> {
     fn shift(&mut self) -> Token {
         let shifted = self.stream.remove(0);
         if shifted.location.line as usize != self.line_number {
+            if self.root.branches.last().is_some()
+            && self.root.branches.last().unwrap().line().is_some() {
+                self.root.branches.pop();
+            }
             self.line_number = shifted.location.line as usize;
             self.root.branches.push(ast::LineNode::new(self.line_number));
         }
@@ -76,7 +80,7 @@ impl<'a> ParseEnvironment<'a> {
                     let prefix = self.optable.lookup(&token.string, 1);
                     return match self.stream[0].class {
                         TokenType::RParen => {
-                            ast::CallNode::new(ast::IdentNode::new(&token.string), vec![])
+                            ast::IdentNode::new(&token.string)
                         },
                         _ => {
                             if prefix.is_none() {
@@ -197,6 +201,7 @@ impl<'a> ParseEnvironment<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use ast::Numerics;
 
     #[test]
     fn numeric_parsing() {

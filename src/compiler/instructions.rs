@@ -14,7 +14,12 @@ impl fmt::Display for Instr {
         let s = match &self {
             Instr::Operand(n) => format!("{: >5}\n", n),
             Instr::Operator(n) => {
-                format!("({:08b}):{}", n, Operators::from_u8(*n).unwrap())
+                let op_str = &Operators::from_u8(*n).unwrap().to_string();
+                if op_str.ends_with("\n") {
+                    format!("({:08b}):{}", n, op_str)
+                } else {
+                    format!("({:08b}):{: <11}", n, op_str)
+                }
             }
         };
         write!(f, "{}", s)

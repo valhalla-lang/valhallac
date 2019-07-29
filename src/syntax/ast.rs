@@ -4,11 +4,11 @@ use std::{fmt, ops};
 /// will represent a value stored.
 #[derive(Clone)]
 pub struct IdentNode {
-    /// The name of the identifer.
+    /// The name of the identifier.
     pub value : String
 }
 
-/// Different types of possible number types in the langauge.
+/// Different types of possible number types in the language.
 /// Max size is determined by max pointer size.
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Numerics {
@@ -20,7 +20,7 @@ pub enum Numerics {
     Real(f64)
 }
 
-fn stronges_cast(left : Numerics, right : Numerics) -> BaseTypes {
+fn strongest_cast(left : Numerics, right : Numerics) -> BaseTypes {
     let mut cast = BaseTypes::TNatural;
     match left {
         Numerics::Real(_) => cast = BaseTypes::TReal,
@@ -49,7 +49,7 @@ macro_rules! new_base {
 macro_rules! fold_on_numeric {
     ($op:tt, $left:expr, $right:expr) => {
         {
-            let cast = stronges_cast($left, $right);
+            let cast = strongest_cast($left, $right);
             match cast {
                 BaseTypes::TNatural => (new_base!($left, usize) $op new_base!($right, usize)).to_numeric(),
                 BaseTypes::TInteger => (new_base!($left, isize) $op new_base!($right, isize)).to_numeric(),
@@ -263,7 +263,7 @@ impl fmt::Display for Nodes {
             Nodes::Call(node)   => format!(
                 "%call{{\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
-            Nodes::Block(node)  => format!("%block{{ ... }}"),
+            Nodes::Block(_)     => format!("%block{{ ... }}"),
             Nodes::Line(node)   => format!("%newline{{ :line {} }}", node.line),
             Nodes::Empty(_)     => String::from("()"),
         };
@@ -304,6 +304,8 @@ impl Nodes {
     pub fn   sym(&self) -> Option<&SymNode>   { unwrap_enum!(self, Nodes::Sym)   }
     pub fn  call(&self) -> Option<&CallNode>  { unwrap_enum!(self, Nodes::Call)  }
     pub fn block(&self) -> Option<&BlockNode> { unwrap_enum!(self, Nodes::Block) }
+    pub fn  line(&self) -> Option<&LineNode>  { unwrap_enum!(self, Nodes::Line)  }
+    pub fn empty(&self) -> Option<&EmptyNode> { unwrap_enum!(self, Nodes::Empty) }
 
     pub fn is_atomic(&self) -> bool {
         match self {
@@ -394,7 +396,7 @@ pub fn pretty_print(node : &Nodes, depth : usize) -> String {
                     ops=pretty_print(&n.operands[0], depth + 2),
                     tab=tab, T=TAB) })
             ),
-            Nodes::Block(n) => format!("%block{{ ... }}"),
+            Nodes::Block(_) => format!("%block{{ ... }}"),
             _ => format!("{}{}", tab, node)
     };
     printable

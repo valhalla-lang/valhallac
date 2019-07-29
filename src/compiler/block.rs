@@ -37,7 +37,7 @@ pub struct LocalBlock<'a> {
     instructions : Vec<Instr>,
 
     // Used only for compilation:
-    locals_map : HashMap<String, usize>,
+    locals_map : HashMap<String, u16>,
     current_line : usize,
 }
 
@@ -72,8 +72,11 @@ impl<'a> LocalBlock<'a> {
                 let s = &ident_node.value;
                 if !self.locals_map.contains_key(s) {
                     issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
-                        "Trying to use unbound local variable `{}`.", s);
+                        "Trying to use unbound local variable `{}'.", s);
                 }
+
+                self.instructions.push(Instr::Operator(Operators::PUSH_LOCAL as u8));
+                self.instructions.push(Instr::Operand(self.locals_map[s]));
             },
             ast::Nodes::Num(num_node) => {
                 self.push_const_instr(numerics_to_element(&num_node.value));
@@ -87,19 +90,39 @@ impl<'a> LocalBlock<'a> {
             ast::Nodes::Call(call_node) => {
                 if call_node.is_binary() {
                     let ident = call_node.callee.call().unwrap().callee.ident().unwrap();
-
                     let args = vec![
-                        &call_node.operands[0],
-                        &call_node.callee.call().unwrap().operands[0],
+                        &call_node.callee.call().unwrap().operands[0], // left
+                        &call_node.operands[0],                        // right
                     ];
 
-                    let inop = internal_functions::get_internal_op(&ident.value, Some(&args));
-                    if let Some(op) = inop {
+                    // Check for assignment.
+                    if ident.value == "=" {
+                        // Direct variable assignment:
+                        if let Some(left) = args[0].ident() {
+                            if self.locals_map.contains_key(&left.value) {
+                                issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                                    "Cannot mutate value of `{}', as is already bound.", left.value);
+                            }
+                            let index = self.locals_map.len() as u16;
+                            self.locals_map.insert(left.value.to_owned(), index);
+                            self.emit(args[1]);
+                            self.instructions.push(Instr::Operator(Operators::STORE_LOCAL as u8));
+                            self.instructions.push(Instr::Operand(index));
+                        }
+                        return;
+                    }
+
+                    // Check for fast internal binary operations such as +, -, *, /, etc.
+                    let maybe_op = internal_functions::get_internal_op(&ident.value, Some(&args));
+                    if let Some(op) = maybe_op {
                         self.emit(args[0]);
                         self.emit(args[1]);
-                        self.instructions.push(op)
+                        self.instructions.push(op);
+                        return;
                     }
                 }
+                self.emit(&call_node.operands[0]);
+                self.emit(&*call_node.callee);
             },
             _ => ()
         };
@@ -117,6 +140,10 @@ impl<'a> fmt::Display for LocalBlock<'a> {
         write!(f, "===Constants===============\n")?;
         for (i, c) in self.constants.iter().enumerate() {
             write!(f, "{: >3} |  {} |\n", i, c)?;
+        }
+        write!(f, "===Locals==================\n")?;
+        for key in self.locals_map.keys() {
+            write!(f, "{: >3} |  {}\n", self.locals_map[key], key)?;
         }
         write!(f, "===Bytecodes===============\n")?;
         for inst in &self.instructions {
