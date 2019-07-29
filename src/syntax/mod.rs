@@ -11,7 +11,7 @@ pub mod token;
 pub mod ast;
 
 /// Dealing with associativity and precedence.
-mod operators;
+pub mod operators;
 
 /// Lexer splits code up into a token-stream
 /// of relevant lexical tokens, making the

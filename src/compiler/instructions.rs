@@ -1,8 +1,9 @@
 use std::fmt;
 
+use enum_primitive_derive::Primitive;
 use num_traits::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instr {
     Operator(u8),
     Operand(u16)

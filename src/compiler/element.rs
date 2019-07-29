@@ -4,6 +4,8 @@ use std::hash::{Hash, Hasher};
 
 use snailquote::escape;
 
+use super::block;
+
 #[derive(Clone, Copy)]
 pub struct Symbol<'a> {
     hash : u64,
@@ -42,8 +44,10 @@ pub enum Element<'a> {
     ENatural(usize),
     EInteger(isize),
     EReal(f64),
-    EString(String),
+    EString(&'a str),
     ESymbol(Symbol<'a>),
+    ECode(block::LocalBlock<'a>),
+    ENil
 }
 
 impl<'a> Element<'a> {
@@ -66,6 +70,8 @@ impl<'a> fmt::Display for Element<'a> {
             Element::EReal(t)    => format!("{: <5}  => (Real)  ", if t.fract() == 0f64 { format!("{:.1}", t) } else { f64::to_string(t) }),
             Element::EString(t)  => format!("{: <5}  => (String)", format!("\"{}\"", escape(t))),
             Element::ESymbol(t)  => format!("{: <5}  => (Sym)   ", t.to_string()),
+            Element::ECode(t)    => format!("{: <5}  => (Block) ", t.name),
+            Element::ENil        => format!("{: <5}  => (Nil)   ", "nil"),
         };
         write!(f, "{}", s)
     }

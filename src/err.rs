@@ -23,7 +23,7 @@ impl fmt::Display for Types {
     }
 }
 
-pub fn issue(class : Types, filename : &str, token : &token::Token,  message : &str) {
+pub fn fissue(class : Types, filename : &str, token : &token::Token,  message : &str) {
     let file = fs::File::open(filename).expect("Invalid filename for error message.");
     let line = BufReader::new(file).lines().nth((token.location.line - 1) as usize).unwrap().unwrap();
 
@@ -41,13 +41,13 @@ pub fn issue(class : Types, filename : &str, token : &token::Token,  message : &
 macro_rules! issue {
     ($type:path, $file:expr, $token:expr, $message:expr) => {
         {
-            err::issue($type, $file, $token, $message);
+            err::fissue($type, $file, $token, $message);
             std::process::exit(1)
         }
     };
     ($type:path, $file:expr, $token:expr, $message:expr, $($form:expr),*) => {
         {
-            err::issue($type, $file, $token, &format!($message, $($form),*));
+            err::fissue($type, $file, $token, &format!($message, $($form),*));
             std::process::exit(1)
         }
     };

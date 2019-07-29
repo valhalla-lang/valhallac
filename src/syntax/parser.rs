@@ -2,7 +2,7 @@ use super::token;
 use super::ast;
 use super::operators;
 
-#[macro_use]
+
 use super::super::err;
 
 use token::{Token, TokenType};

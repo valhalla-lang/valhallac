@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Identifiers, node representing a name that
 /// will represent a value stored.
+#[derive(Clone)]
 pub struct IdentNode {
     /// The name of the identifer.
     pub value : String
@@ -9,7 +10,7 @@ pub struct IdentNode {
 
 /// Different types of possible number types in the langauge.
 /// Max size is determined by max pointer size.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Numerics {
     /// Naturals are unsigned ints.
     Natural(usize),
@@ -104,6 +105,7 @@ impl fmt::Display for Numerics {
 }
 
 /// Node that represents a number.
+#[derive(Clone)]
 pub struct NumNode {
     /// Holds a the numeric value.
     pub value : Numerics
@@ -111,12 +113,14 @@ pub struct NumNode {
 
 
 /// Node for holding strings.
+#[derive(Clone)]
 pub struct StrNode {
     /// Contents of the utf-8 string.
     pub value : String
 }
 
 /// Symbol Node.
+#[derive(Clone)]
 pub struct SymNode {
     /// Value/name stored as a string and
     /// excludes the colon (:) in front.
@@ -125,6 +129,7 @@ pub struct SymNode {
 
 /// Call Node has a pointer to the callee node
 /// and a list of operand nodes.
+#[derive(Clone)]
 pub struct CallNode {
     /// Pointer to heap allocated calling node.
     pub callee : Box<Nodes>,
@@ -134,14 +139,26 @@ pub struct CallNode {
 
 /// Represents a block of code / compound statements
 /// in order of when they will be executed.
+#[derive(Clone)]
 pub struct BlockNode {
     /// Pointer to list of nodes in the code block.
     pub statements : Vec<Nodes>
 }
 
+#[derive(Clone)]
 pub struct EmptyNode;
 
+/// All base types, determined at compile time.
+#[derive(Clone, Copy, PartialEq)]
+pub enum BaseTypes {
+    TNatural, TInteger, TReal,
+    TString, TSym,
+
+    TUnknown
+}
+
 /// All node types.
+#[derive(Clone)]
 pub enum Nodes {
     Ident(IdentNode),
     Num(NumNode),
@@ -181,6 +198,22 @@ macro_rules! unwrap_enum {
 
 
 impl Nodes {
+    pub fn yield_type(&self) -> BaseTypes {
+        match self {
+            Nodes::Num(nn) => {
+                match nn.value {
+                    Numerics::Natural(_) => BaseTypes::TNatural,
+                    Numerics::Integer(_) => BaseTypes::TInteger,
+                    Numerics::Real(_)    => BaseTypes::TReal,
+                }
+            },
+            Nodes::Str(_) => BaseTypes::TString,
+            Nodes::Sym(_) => BaseTypes::TSym,
+
+            _ => BaseTypes::TUnknown
+        }
+    }
+
     pub fn ident(&self) -> Option<&IdentNode> { unwrap_enum!(self, Nodes::Ident) }
     pub fn   num(&self) -> Option<&NumNode>   { unwrap_enum!(self, Nodes::Num)   }
     pub fn   str(&self) -> Option<&StrNode>   { unwrap_enum!(self, Nodes::Str)   }
