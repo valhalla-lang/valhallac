@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, ops};
 
 /// Identifiers, node representing a name that
 /// will represent a value stored.
@@ -10,7 +10,7 @@ pub struct IdentNode {
 
 /// Different types of possible number types in the langauge.
 /// Max size is determined by max pointer size.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Numerics {
     /// Naturals are unsigned ints.
     Natural(usize),
@@ -18,6 +18,79 @@ pub enum Numerics {
     Integer(isize),
     /// Reals are represented as a double.
     Real(f64)
+}
+
+fn stronges_cast(left : Numerics, right : Numerics) -> BaseTypes {
+    let mut cast = BaseTypes::TNatural;
+    match left {
+        Numerics::Real(_) => cast = BaseTypes::TReal,
+        Numerics::Integer(_) => cast = BaseTypes::TInteger,
+        _ => ()
+    };
+    if cast == BaseTypes::TReal { return cast; }
+    match right {
+        Numerics::Real(_) => cast = BaseTypes::TReal,
+        Numerics::Integer(_) => cast = BaseTypes::TInteger,
+        _ => ()
+    };
+    cast
+}
+
+macro_rules! new_base {
+    ($arg:expr, $base:ident) => {
+        match &$arg {
+            Numerics::Natural(n) => *n as $base,
+            Numerics::Integer(n) => *n as $base,
+            Numerics::Real(n)    => *n as $base,
+        };
+    };
+}
+
+macro_rules! fold_on_numeric {
+    ($op:tt, $left:expr, $right:expr) => {
+        {
+            let cast = stronges_cast($left, $right);
+            match cast {
+                BaseTypes::TNatural => (new_base!($left, usize) $op new_base!($right, usize)).to_numeric(),
+                BaseTypes::TInteger => (new_base!($left, isize) $op new_base!($right, isize)).to_numeric(),
+                BaseTypes::TReal    => (new_base!($left,   f64) $op new_base!($right,   f64)).to_numeric(),
+                _ => panic!("Numeric porting non-numeric type?")
+            }
+        }
+    };
+}
+
+impl ops::Add<Numerics> for Numerics {
+    type Output = Numerics;
+    fn add(self, right : Numerics) -> Numerics {
+        fold_on_numeric!(+, self, right)
+    }
+}
+
+impl ops::Sub<Numerics> for Numerics {
+    type Output = Numerics;
+    fn sub(self, right : Numerics) -> Numerics {
+        if fold_on_numeric!(>, right, self) == Numerics::Natural(1) {
+            if let Numerics::Natural(u) = right {
+                return fold_on_numeric!(-, self, Numerics::Integer(u as isize));
+            }
+        }
+        fold_on_numeric!(-, self, right)
+    }
+}
+
+impl ops::Mul<Numerics> for Numerics {
+    type Output = Numerics;
+    fn mul(self, right : Numerics) -> Numerics {
+        fold_on_numeric!(*, self, right)
+    }
+}
+
+impl ops::Div<Numerics> for Numerics {
+    type Output = Numerics;
+    fn div(self, right : Numerics) -> Numerics {
+        fold_on_numeric!(/, self, right)
+    }
 }
 
 /// Parse a string of more than two chars with a specified radix, into an ast::Numeric.
@@ -69,6 +142,10 @@ impl ToNumeric for &str {
             }
         };
     }
+}
+
+impl ToNumeric for bool {
+    fn to_numeric(&self) -> Numerics { Numerics::Natural(if *self { 1 } else { 0 }) }
 }
 
 impl ToNumeric for usize {

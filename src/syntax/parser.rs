@@ -54,7 +54,7 @@ impl<'a> ParseEnvironment<'a> {
 
     fn skip_newlines(&mut self) {
         while !self.stream.is_empty() && self.stream[0].string == "\n" {
-                    self.stream.remove(0);
+            self.stream.remove(0);
         }
     }
 
@@ -64,22 +64,24 @@ impl<'a> ParseEnvironment<'a> {
                 let is_op = self.optable.exists(&token.string);
                 if is_op {
                     let prefix = self.optable.lookup(&token.string, 1);
-                    if prefix.is_none() {
-                        return match self.stream[0].class {
-                            TokenType::RParen => {
-                                ast::CallNode::new(ast::IdentNode::new(&token.string), vec![])
-                            },
-                            _ => ast::CallNode::new(
+                    return match self.stream[0].class {
+                        TokenType::RParen => {
+                            ast::CallNode::new(ast::IdentNode::new(&token.string), vec![])
+                        },
+                        _ => {
+                            if prefix.is_none() {
+                                ast::CallNode::new(
                                     ast::CallNode::new(
                                         ast::IdentNode::new(&token.string),
                                         vec![ast::EmptyNode::new()]),
                                     vec![self.expr(500)])
-                        };
-                    } else {  // It is a prefix unary operator.
-                        return ast::CallNode::new(
-                            ast::IdentNode::new(&token.string),
-                            vec![self.expr(500)]);
-                    }
+                            } else {
+                                ast::CallNode::new(
+                                    ast::IdentNode::new(&token.string),
+                                    vec![self.expr(500)])
+                            }
+                        }
+                    };
                 }
                 ast::IdentNode::new(&token.string)
             },

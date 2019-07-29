@@ -21,6 +21,9 @@ pub mod lexer;
 /// Converts a token-stream into a nested AST.
 pub mod parser;
 
+/// Tree static analysis.
+pub mod analyser;
+
 use std::fs;
 use token::ShowStream;
 
@@ -34,7 +37,8 @@ pub fn parse_file(filename : &str) -> ast::Root {
     let stream = lexer::lex(&code);
     println!("Stream:\n{}\n", stream.to_string());
 
-    let tree = parser::parse(stream, filename);
+    let mut tree = parser::parse(stream, filename);
     println!("AST:\n{}\n", tree);
+    analyser::replace(&mut tree);
     tree
 }

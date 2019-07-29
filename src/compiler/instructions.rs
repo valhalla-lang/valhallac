@@ -1,7 +1,7 @@
 use std::fmt;
 
 use enum_primitive_derive::Primitive;
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instr {
@@ -52,6 +52,8 @@ pub enum Operators {
     I_DIV       = 54,
     R_DIV       = 55,
     U_DIV       = 56,
+
+    NOP = 255
 }
 
 
