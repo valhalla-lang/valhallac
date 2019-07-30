@@ -1,5 +1,6 @@
 use super::ast;
 
+
 fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
     if node.num().is_some() { return Some(node.clone()); }
     if node.call().is_some() && node.call().unwrap().is_binary() {
@@ -38,9 +39,14 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
                 l_value = left.unwrap().num().unwrap().value;
                 r_value = right.unwrap().num().unwrap().value;
             } else {
-                let l = constant_fold(left.unwrap());
-                let r = constant_fold(right.unwrap());
-                if l.is_none() || r.is_none() { return None; }
+                let mut l = constant_fold(left.unwrap());
+                let mut r = constant_fold(right.unwrap());
+                if l.is_none() && r.is_none() { return None; }
+                if l.is_some() {
+                    r = Some(right.unwrap().clone());
+                } else {
+                    l = Some(left.unwrap().clone());
+                }
 
                 let foldl = constant_fold(&l.unwrap());
                 let foldr = constant_fold(&r.unwrap());
@@ -55,7 +61,10 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
                 "*" => l_value * r_value,
                 "/" => {
                     if r_value == ast::Numerics::Natural(0) {
-                        return None;
+                        return Some(ast::CallNode::new(
+                                ast::CallNode::new(ast::IdentNode::new("/"),
+                                    vec![ast::Nodes::Num(ast::NumNode { value : l_value })]),
+                                vec![ast::NumNode::new(0)]));
                     }
                     l_value / r_value
                 },
@@ -80,4 +89,5 @@ pub fn replace(root : &mut ast::Root) {
         } // END TOP-LEVEL CONSTANT FOLD
         i += 1;
     }
+    println!("\n\n{}", root);
 }

@@ -236,6 +236,7 @@ pub enum BaseTypes {
     TNatural, TInteger, TReal,
     TString, TSym,
 
+    TNil,
     TUnknown
 }
 

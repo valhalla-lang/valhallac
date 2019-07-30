@@ -1,5 +1,6 @@
 use std::fmt;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use super::super::err;
 
@@ -8,13 +9,14 @@ use syntax::ast;
 
 use super::element;
 use super::instructions;
+use super::types;
 
 use element::{Element, Symbol};
 use instructions::{Instr, Operators};
 
 use super::internal_functions;
 
-fn append_unique<'a>(v : &mut Vec<Element<'a>>, e : Element<'a>) -> usize {
+fn append_unique<'a, T : Clone + PartialEq>(v : &mut Vec<T>, e : T) -> usize {
     let index = v.iter().position(|c| c == &e);
     if index.is_none() { v.push(e.clone()); }
     index.unwrap_or(v.len() - 1)
@@ -28,17 +30,28 @@ pub fn numerics_to_element<'a>(num : &ast::Numerics) -> Element<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
+struct IdentTypePair<'a>(String, &'a ast::Nodes);
+
+#[derive(Clone)]
 pub struct LocalBlock<'a> {
     pub name : &'a str,
     filename : &'a str,
     constants : Vec<Element<'a>>,
-    locals : Vec<Element<'a>>,
     instructions : Vec<Instr>,
+    globals : Vec<String>,
 
     // Used only for compilation:
     locals_map : HashMap<String, u16>,
+    types_to_check : VecDeque<IdentTypePair<'a>>,
     current_line : usize,
+}
+
+impl<'a> PartialEq for LocalBlock<'a> {
+    fn eq(&self, other : &Self) -> bool {
+        self.constants == other.constants
+        && self.instructions == other.instructions
+    }
 }
 
 impl<'a> LocalBlock<'a> {
@@ -47,10 +60,11 @@ impl<'a> LocalBlock<'a> {
             name,
             filename,
             constants: vec![],
-            locals: vec![],
             instructions: vec![],
+            globals: vec![],
 
             locals_map: HashMap::new(),
+            types_to_check: VecDeque::new(),
             current_line: 0,
         }
     }
@@ -59,6 +73,31 @@ impl<'a> LocalBlock<'a> {
         let index = append_unique(&mut self.constants, e);
         self.instructions.push(Instr::Operator(Operators::PUSH_CONST as u8));
         self.instructions.push(Instr::Operand(index as u16));
+    }
+
+    fn ident_assignment(&mut self, left : &ast::IdentNode, right : &'a ast::Nodes) {
+        if self.types_to_check.is_empty() {
+            issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
+                "You must state what set `{}' is a member of. No type annotation found.", left.value);
+        }
+        if self.locals_map.contains_key(&left.value) {
+            issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                "Cannot mutate value of `{}', as is already bound.", left.value);
+        }
+        let index = self.locals_map.len() as u16;
+        self.locals_map.insert(left.value.to_owned(), index);
+
+        self.emit(right);
+        self.instructions.push(Instr::Operator(Operators::DUP as u8));
+        let type_node = self.types_to_check.pop_front().unwrap().1;
+        self.emit(type_node);
+        self.instructions.push(Instr::Operator(Operators::CHECK_TYPE as u8));
+        self.instructions.push(Instr::Operator(Operators::STORE_LOCAL as u8));
+        self.instructions.push(Instr::Operand(index));
+    }
+
+    fn annotation(&mut self, left : &ast::IdentNode, right : &'a ast::Nodes) {
+        self.types_to_check.push_back(IdentTypePair(left.value.to_owned(), right));
     }
 
     fn emit(&mut self, node : &'a ast::Nodes) {
@@ -71,8 +110,10 @@ impl<'a> LocalBlock<'a> {
             ast::Nodes::Ident(ident_node) => {
                 let s = &ident_node.value;
                 if !self.locals_map.contains_key(s) {
-                    issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
-                        "Trying to use unbound local variable `{}'.", s);
+                    self.instructions.push(Instr::Operator(Operators::PUSH_SUPER as u8));
+                    let index = append_unique(&mut self.globals, s.to_owned());
+                    self.instructions.push(Instr::Operand(index as u16));
+                    return;
                 }
 
                 self.instructions.push(Instr::Operator(Operators::PUSH_LOCAL as u8));
@@ -99,16 +140,23 @@ impl<'a> LocalBlock<'a> {
                     if ident.value == "=" {
                         // Direct variable assignment:
                         if let Some(left) = args[0].ident() {
-                            if self.locals_map.contains_key(&left.value) {
-                                issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
-                                    "Cannot mutate value of `{}', as is already bound.", left.value);
-                            }
-                            let index = self.locals_map.len() as u16;
-                            self.locals_map.insert(left.value.to_owned(), index);
-                            self.emit(args[1]);
-                            self.instructions.push(Instr::Operator(Operators::STORE_LOCAL as u8));
-                            self.instructions.push(Instr::Operand(index));
+                            self.ident_assignment(left, args[1]);
                         }
+                        return;
+                    }
+
+                    // Check for type annotation.
+                    if ident.value == ":" {
+                        // If the LHS is not an ident, it is not a
+                        //   valid annotation.
+                        if args[0].ident().is_none() {
+                            issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                                "Left of `:` type annotator must be an identifier.");
+                        }
+                        let left = args[0].ident().unwrap();
+
+                        // Annotation of variable or function.
+                        self.annotation(left, args[1]);
                         return;
                     }
 
@@ -123,8 +171,7 @@ impl<'a> LocalBlock<'a> {
                 }
                 self.emit(&call_node.operands[0]);
                 self.emit(&*call_node.callee);
-                self.instructions.push(Instr::Operator(Operators::CALL_N as u8));
-                self.instructions.push(Instr::Operand(2));
+                self.instructions.push(Instr::Operator(Operators::CALL_1 as u8));
             },
             _ => ()
         };
@@ -146,6 +193,10 @@ impl<'a> fmt::Display for LocalBlock<'a> {
         write!(f, "===Locals==================\n")?;
         for key in self.locals_map.keys() {
             write!(f, "{: >3} |  {}\n", self.locals_map[key], key)?;
+        }
+        write!(f, "===Globals=================\n")?;
+        for (i, c) in self.globals.iter().enumerate() {
+            write!(f, "{: >3} |  {}\n", i, c)?;
         }
         write!(f, "===Bytecodes===============\n")?;
         for inst in &self.instructions {

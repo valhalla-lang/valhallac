@@ -39,7 +39,8 @@ pub enum Operators {
     DUP         = 6,
     DUP_N       = 7,
     SWAP        = 8,
-    CALL_N      = 9,
+    CALL_1      = 9,
+    CHECK_TYPE  = 10,
 
     N_ADD       = 40,
     I_ADD       = 41,
@@ -77,7 +78,8 @@ impl fmt::Display for Operators {
             Operators::DUP         => "DUP\n",
             Operators::DUP_N       => "DUP_N",
             Operators::SWAP        => "SWAP\n",
-            Operators::CALL_N      => "CALL_N",
+            Operators::CALL_1      => "CALL_1\n",
+            Operators::CHECK_TYPE  => "CHECK_TYPE\n",
 
             Operators::N_ADD       => "N_ADD\n",
             Operators::I_ADD       => "I_ADD\n",

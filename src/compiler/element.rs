@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 use snailquote::escape;
 
 use super::block;
+use super::types;
 
 #[derive(Clone, Copy)]
 pub struct Symbol<'a> {
@@ -47,6 +48,7 @@ pub enum Element<'a> {
     EString(&'a str),
     ESymbol(Symbol<'a>),
     ECode(block::LocalBlock<'a>),
+    ESet(types::Set<'a>),
     ENil
 }
 
@@ -71,6 +73,7 @@ impl<'a> fmt::Display for Element<'a> {
             Element::EString(t)  => format!("{: <5}  => (String)", format!("\"{}\"", escape(t))),
             Element::ESymbol(t)  => format!("{: <5}  => (Sym)   ", t.to_string()),
             Element::ECode(t)    => format!("{: <5}  => (Block) ", t.name),
+            Element::ESet(t)     => format!("{: <5p}  => (Set)   ", t),
             Element::ENil        => format!("{: <5}  => (Nil)   ", "nil"),
         };
         write!(f, "{}", s)
