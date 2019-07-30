@@ -53,7 +53,12 @@ fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
                 "+" => l_value + r_value,
                 "-" => l_value - r_value,
                 "*" => l_value * r_value,
-                "/" => l_value / r_value,
+                "/" => {
+                    if r_value == ast::Numerics::Natural(0) {
+                        return None;
+                    }
+                    l_value / r_value
+                },
                 _ => return None
             };
             return Some(ast::Nodes::Num(ast::NumNode { value }));

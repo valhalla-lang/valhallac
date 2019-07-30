@@ -115,14 +115,16 @@ impl<'a> LocalBlock<'a> {
                     // Check for fast internal binary operations such as +, -, *, /, etc.
                     let maybe_op = internal_functions::get_internal_op(&ident.value, Some(&args));
                     if let Some(op) = maybe_op {
-                        self.emit(args[0]);
                         self.emit(args[1]);
+                        self.emit(args[0]);
                         self.instructions.push(op);
                         return;
                     }
                 }
                 self.emit(&call_node.operands[0]);
                 self.emit(&*call_node.callee);
+                self.instructions.push(Instr::Operator(Operators::CALL_N as u8));
+                self.instructions.push(Instr::Operand(2));
             },
             _ => ()
         };
