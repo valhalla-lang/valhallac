@@ -1,6 +1,5 @@
 use std::fmt;
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use super::super::err;
 
@@ -9,7 +8,6 @@ use syntax::ast;
 
 use super::element;
 use super::instructions;
-use super::types;
 
 use element::{Element, Symbol};
 use instructions::{Instr, Operators};
@@ -40,6 +38,7 @@ pub struct LocalBlock<'a> {
     constants : Vec<Element<'a>>,
     instructions : Vec<Instr>,
     globals : Vec<String>,
+    pub return_type : ast::StaticTypes,
 
     // Used only for compilation:
     locals_map : HashMap<String, u16>,
@@ -62,6 +61,7 @@ impl<'a> LocalBlock<'a> {
             constants: vec![],
             instructions: vec![],
             globals: vec![],
+            return_type: ast::StaticTypes::TUnknown,
 
             locals_map: HashMap::new(),
             types_to_check: VecDeque::new(),
@@ -78,7 +78,7 @@ impl<'a> LocalBlock<'a> {
     fn ident_assignment(&mut self, left : &ast::IdentNode, right : &'a ast::Nodes) {
         if self.types_to_check.is_empty() {
             issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
-                "You must state what set `{}' is a member of. No type annotation found.", left.value);
+                "You must state what set `{}' is a member of. No type-annotation found.", left.value);
         }
         if self.locals_map.contains_key(&left.value) {
             issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
@@ -88,10 +88,12 @@ impl<'a> LocalBlock<'a> {
         self.locals_map.insert(left.value.to_owned(), index);
 
         self.emit(right);
-        self.instructions.push(Instr::Operator(Operators::DUP as u8));
-        let type_node = self.types_to_check.pop_front().unwrap().1;
-        self.emit(type_node);
-        self.instructions.push(Instr::Operator(Operators::CHECK_TYPE as u8));
+        if left.static_type == ast::StaticTypes::TUnknown {
+            self.instructions.push(Instr::Operator(Operators::DUP as u8));
+            let type_node = self.types_to_check.pop_front().unwrap().1;
+            self.emit(type_node);
+            self.instructions.push(Instr::Operator(Operators::CHECK_TYPE as u8));
+        }
         self.instructions.push(Instr::Operator(Operators::STORE_LOCAL as u8));
         self.instructions.push(Instr::Operand(index));
     }

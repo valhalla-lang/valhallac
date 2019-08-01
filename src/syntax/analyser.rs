@@ -89,5 +89,4 @@ pub fn replace(root : &mut ast::Root) {
         } // END TOP-LEVEL CONSTANT FOLD
         i += 1;
     }
-    println!("\n\n{}", root);
 }

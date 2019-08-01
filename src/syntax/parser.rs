@@ -1,3 +1,5 @@
+use std::collections::{HashMap, VecDeque};
+
 use super::token;
 use super::ast;
 use super::operators;
@@ -6,6 +8,7 @@ use super::super::err;
 
 use token::{Token, TokenType};
 use ast::Nodes;
+use ast::StaticTypes as ST;
 
 pub fn parse(stream : Vec<Token>, file : &str) -> ast::Root {
     let mut environment = ParseEnvironment::new(stream, file);
@@ -21,6 +24,8 @@ struct ParseEnvironment<'a> {
     pub stream : Vec<Token>,
     pub optable : operators::PrecedenceTable<'a>,
     pub file : &'a str,
+    pub annotations : VecDeque<ast::CallNode>,
+    pub ident_types : HashMap<String, ast::StaticTypes>,
 
     ignore_newline : bool,
     line_number : usize,
@@ -32,6 +37,8 @@ impl<'a> ParseEnvironment<'a> {
             root: ast::Root::new(),
             stream: stream,
             optable: operators::PrecedenceTable::new(),
+            annotations: VecDeque::new(),
+            ident_types: HashMap::new(),
             file,
 
             ignore_newline: false,
@@ -40,6 +47,8 @@ impl<'a> ParseEnvironment<'a> {
     }
 
     pub fn start(&mut self) {
+        self.root.branches.push(ast::FileNode::new(self.file.to_owned()));
+
         let mut current = self.stream.first();
         while current.is_some() && current.unwrap().class != TokenType::EOF {
             if current.unwrap().class == TokenType::Term {
@@ -51,6 +60,28 @@ impl<'a> ParseEnvironment<'a> {
             self.root.branches.push(e);
             current = self.stream.get(0);
         }
+        self.assign_types();
+    }
+
+    fn get_type(&self, node : &ast::Nodes) -> ast::StaticTypes {
+        if let Some(ident) = node.ident() {
+            return match ident.value.as_str() {
+                "Nat"  => ST::TSet(Box::new(ST::TNatural)),
+                "Int"  => ST::TSet(Box::new(ST::TInteger)),
+                "Real" => ST::TSet(Box::new(ST::TReal)),
+                "Universal" => ST::TSet(Box::new(ST::TUnknown)),
+                _ => ident.static_type.clone()
+            };
+        }
+        node.yield_type()
+    }
+
+    fn remember_type(&mut self, k : String, v : ast::StaticTypes) {
+        if self.ident_types.contains_key(&k) {
+            self.ident_types.insert(k, ast::StaticTypes::TUnknown);
+            return;
+        }
+        self.ident_types.insert(k, v);
     }
 
     fn shift(&mut self) -> Token {
@@ -158,6 +189,27 @@ impl<'a> ParseEnvironment<'a> {
                 left = self.func_apply(left);
             }
         }
+        if !left.call().unwrap().is_binary() { return left; }
+        if let Some(call_ident) = left.call().unwrap().callee.call().unwrap().callee.ident() {
+            if call_ident.value == ":" {
+                self.annotations.push_back(left.call().unwrap().clone());
+            }
+            if call_ident.value == "=" {
+                let maybe_annotation = self.annotations.pop_front();
+                if let Some(annotation) = maybe_annotation {
+                    let maybe_set = self.get_type(&annotation.operands[0]);
+                    if let ast::StaticTypes::TSet(set) = maybe_set {
+                        self.remember_type(
+                            left.call().unwrap().callee.call().unwrap().operands[0].ident().unwrap().value.to_owned(),
+                            *set);
+                    } else {
+                        // Error, annotation must be set.
+                    }
+                } else {
+                    // Error, missing annotation for assignment.
+                }
+            }
+        }
         return left;
     }
 
@@ -194,6 +246,39 @@ impl<'a> ParseEnvironment<'a> {
         if t.class != tt {
             issue!(err::Types::ParseError, self.file, t,
                 "Unexpected token type: `{}`, expected: `{}`.", t.class, tt);
+        }
+    }
+
+
+
+    fn assign_types(&mut self) {
+
+        fn recurse_type_assign(subtree : &Nodes, map : &HashMap<String, ST>) -> Nodes {
+            match subtree {
+                Nodes::Ident(ident_node) => {
+                    if map.contains_key(&ident_node.value) {
+                        let mut cloned_ident = ident_node.clone();
+                        cloned_ident.static_type = map[&ident_node.value].clone();
+                        return Nodes::Ident(cloned_ident);
+                    }
+                },
+                Nodes::Call(call_node) => {
+                    let mut cloned_call = call_node.clone();
+                    cloned_call.callee = Box::new(recurse_type_assign(&*call_node.callee, map));
+                    cloned_call.operands = vec![recurse_type_assign(&call_node.operands[0], map)];
+                    return Nodes::Call(cloned_call);
+                },
+                _ => ()
+            };
+            return subtree.to_owned();
+        };
+
+        let mut i = 0;
+        let tree_size = self.root.branches.len();
+
+        while i < tree_size {
+            self.root.branches[i] = recurse_type_assign(&self.root.branches[i], &self.ident_types);
+            i += 1;
         }
     }
 }

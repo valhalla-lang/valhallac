@@ -5,7 +5,10 @@ use std::{fmt, ops};
 #[derive(Clone)]
 pub struct IdentNode {
     /// The name of the identifier.
-    pub value : String
+    pub value : String,
+
+    /// Type it holds.
+    pub static_type : StaticTypes
 }
 
 /// Different types of possible number types in the language.
@@ -20,17 +23,17 @@ pub enum Numerics {
     Real(f64)
 }
 
-fn strongest_cast(left : Numerics, right : Numerics) -> BaseTypes {
-    let mut cast = BaseTypes::TNatural;
+fn strongest_cast(left : Numerics, right : Numerics) -> StaticTypes {
+    let mut cast = StaticTypes::TNatural;
     match left {
-        Numerics::Real(_) => cast = BaseTypes::TReal,
-        Numerics::Integer(_) => cast = BaseTypes::TInteger,
+        Numerics::Real(_) => cast = StaticTypes::TReal,
+        Numerics::Integer(_) => cast = StaticTypes::TInteger,
         _ => ()
     };
-    if cast == BaseTypes::TReal { return cast; }
+    if cast == StaticTypes::TReal { return cast; }
     match right {
-        Numerics::Real(_) => cast = BaseTypes::TReal,
-        Numerics::Integer(_) => cast = BaseTypes::TInteger,
+        Numerics::Real(_) => cast = StaticTypes::TReal,
+        Numerics::Integer(_) => cast = StaticTypes::TInteger,
         _ => ()
     };
     cast
@@ -51,9 +54,9 @@ macro_rules! fold_on_numeric {
         {
             let cast = strongest_cast($left, $right);
             match cast {
-                BaseTypes::TNatural => (new_base!($left, usize) $op new_base!($right, usize)).to_numeric(),
-                BaseTypes::TInteger => (new_base!($left, isize) $op new_base!($right, isize)).to_numeric(),
-                BaseTypes::TReal    => (new_base!($left,   f64) $op new_base!($right,   f64)).to_numeric(),
+                StaticTypes::TNatural => (new_base!($left, usize) $op new_base!($right, usize)).to_numeric(),
+                StaticTypes::TInteger => (new_base!($left, isize) $op new_base!($right, isize)).to_numeric(),
+                StaticTypes::TReal    => (new_base!($left,   f64) $op new_base!($right,   f64)).to_numeric(),
                 _ => panic!("Numeric porting non-numeric type?")
             }
         }
@@ -211,7 +214,12 @@ pub struct CallNode {
     /// Pointer to heap allocated calling node.
     pub callee : Box<Nodes>,
     /// Pointer to list of operand nodes.
-    pub operands : Vec<Nodes>
+    pub operands : Vec<Nodes>,
+
+    /// What type its operand is.
+    pub operand_type : StaticTypes,
+    /// What type it returns.
+    pub return_type : StaticTypes
 }
 
 /// Represents a block of code / compound statements
@@ -228,16 +236,40 @@ pub struct LineNode {
 }
 
 #[derive(Clone)]
+pub struct FileNode {
+    pub filename : String
+}
+
+#[derive(Clone)]
 pub struct EmptyNode;
 
 /// All base types, determined at compile time.
-#[derive(Clone, Copy, PartialEq)]
-pub enum BaseTypes {
+#[derive(Clone, PartialEq)]
+pub enum StaticTypes {
     TNatural, TInteger, TReal,
-    TString, TSym,
+    TString, TSymbol,
+    TSet(Box<StaticTypes>),
+    TFunction(Box<StaticTypes>, Box<StaticTypes>),
 
     TNil,
     TUnknown
+}
+
+impl fmt::Display for StaticTypes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            StaticTypes::TNatural => "Natural".to_string(),
+            StaticTypes::TInteger => "Integer".to_string(),
+            StaticTypes::TReal    => "Real".to_string(),
+            StaticTypes::TString  => "String".to_string(),
+            StaticTypes::TSymbol  => "Symbol".to_string(),
+            StaticTypes::TSet(st) => format!("Set({})", st),
+            StaticTypes::TFunction(o, r) => format!("Function({}, {})", o, r),
+            StaticTypes::TNil     => "Nil".to_string(),
+            StaticTypes::TUnknown => "Unknown".to_string(),
+        };
+        write!(f, "{}", s)
+    }
 }
 
 /// All node types.
@@ -250,6 +282,7 @@ pub enum Nodes {
     Call(CallNode),
     Block(BlockNode),
     Line(LineNode),
+    File(FileNode),
     Empty(EmptyNode),
 }
 
@@ -266,6 +299,7 @@ impl fmt::Display for Nodes {
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
             Nodes::Block(_)     => format!("%block{{ ... }}"),
             Nodes::Line(node)   => format!("%newline{{ :line {} }}", node.line),
+            Nodes::File(node)   => format!("%newfile{{ :filename {} }}", node.filename),
             Nodes::Empty(_)     => String::from("()"),
         };
         write!(f, "{}", printable)
@@ -283,19 +317,25 @@ macro_rules! unwrap_enum {
 
 
 impl Nodes {
-    pub fn yield_type(&self) -> BaseTypes {
+    /// Function that returns the statically known type
+    /// of any syntactic node generated.
+    pub fn yield_type(&self) -> StaticTypes {
         match self {
             Nodes::Num(nn) => {
                 match nn.value {
-                    Numerics::Natural(_) => BaseTypes::TNatural,
-                    Numerics::Integer(_) => BaseTypes::TInteger,
-                    Numerics::Real(_)    => BaseTypes::TReal,
+                    Numerics::Natural(_) => StaticTypes::TNatural,
+                    Numerics::Integer(_) => StaticTypes::TInteger,
+                    Numerics::Real(_)    => StaticTypes::TReal,
                 }
             },
-            Nodes::Str(_) => BaseTypes::TString,
-            Nodes::Sym(_) => BaseTypes::TSym,
+            Nodes::Str(_) => StaticTypes::TString,
+            Nodes::Sym(_) => StaticTypes::TSymbol,
+            Nodes::Ident(i) => i.static_type.clone(),
+            Nodes::Call(c) => StaticTypes::TFunction(
+                Box::new(c.operand_type.clone()),
+                Box::new(c.return_type.clone())),
 
-            _ => BaseTypes::TUnknown
+            _ => StaticTypes::TUnknown
         }
     }
 
@@ -306,6 +346,7 @@ impl Nodes {
     pub fn  call(&self) -> Option<&CallNode>  { unwrap_enum!(self, Nodes::Call)  }
     pub fn block(&self) -> Option<&BlockNode> { unwrap_enum!(self, Nodes::Block) }
     pub fn  line(&self) -> Option<&LineNode>  { unwrap_enum!(self, Nodes::Line)  }
+    pub fn  file(&self) -> Option<&FileNode>  { unwrap_enum!(self, Nodes::File)  }
     pub fn empty(&self) -> Option<&EmptyNode> { unwrap_enum!(self, Nodes::Empty) }
 
     pub fn is_atomic(&self) -> bool {
@@ -328,7 +369,12 @@ impl Nodes {
 }
 
 impl IdentNode {
-    pub fn new(value : &str) -> Nodes { Nodes::Ident(IdentNode { value: value.to_string() }) }
+    pub fn new(value : &str) -> Nodes {
+        Nodes::Ident(IdentNode {
+            value: value.to_string(),
+            static_type: StaticTypes::TUnknown
+        })
+    }
 }
 
 impl NumNode {
@@ -351,6 +397,8 @@ impl CallNode {
         Nodes::Call(CallNode {
             callee: Box::new(callee),
             operands: operands,
+            operand_type: StaticTypes::TUnknown,
+            return_type: StaticTypes::TUnknown
         })
     }
 
@@ -366,6 +414,10 @@ impl CallNode {
 
 impl LineNode {
     pub fn new(line : usize) -> Nodes { Nodes::Line(LineNode { line }) }
+}
+
+impl FileNode {
+    pub fn new(filename : String) -> Nodes { Nodes::File(FileNode { filename }) }
 }
 
 impl EmptyNode {

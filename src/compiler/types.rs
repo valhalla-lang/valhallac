@@ -18,7 +18,7 @@ macro_rules! is_elem {
 
 #[derive(Clone, PartialEq)]
 pub struct Set<'a> {
-    base_type : Option<ast::BaseTypes>,
+    base_type : Option<ast::StaticTypes>,
     elements : Vec<Element<'a>>,
     unions : Vec<Set<'a>>,
     intersections : Vec<Set<'a>>,
@@ -27,7 +27,7 @@ pub struct Set<'a> {
 }
 
 impl<'a> Set<'a> {
-    pub fn new(filename : &'a str, base_type : Option<ast::BaseTypes>) -> Self {
+    pub fn new(filename : &'a str, base_type : Option<ast::StaticTypes>) -> Self {
         Self {
             base_type,
             elements: vec![],
@@ -38,14 +38,21 @@ impl<'a> Set<'a> {
         }
     }
     pub fn is_memeber(&self, e : Element) -> bool {
-        if let Some(base) = self.base_type {
+        if let Some(base) = &self.base_type {
             return match base {
-                ast::BaseTypes::TNatural => is_elem!(e, Element::ENatural),
-                ast::BaseTypes::TInteger => is_elem!(e, Element::EInteger),
-                ast::BaseTypes::TReal    => is_elem!(e, Element::EReal),
-                ast::BaseTypes::TSym     => is_elem!(e, Element::ESymbol),
-                ast::BaseTypes::TString  => is_elem!(e, Element::EString),
-                ast::BaseTypes::TNil      => e == Element::ENil,
+                ast::StaticTypes::TNatural => is_elem!(e, Element::ENatural),
+                ast::StaticTypes::TInteger => is_elem!(e, Element::EInteger),
+                ast::StaticTypes::TReal    => is_elem!(e, Element::EReal),
+                ast::StaticTypes::TSymbol  => is_elem!(e, Element::ESymbol),
+                ast::StaticTypes::TString  => is_elem!(e, Element::EString),
+                ast::StaticTypes::TFunction(o, r) => {
+                    match e {
+                        Element::ECode(code) => code.return_type == **r,
+                        _ => false
+                    }
+                },
+
+                ast::StaticTypes::TNil      => e == Element::ENil,
                 _ => false
             };
         }
