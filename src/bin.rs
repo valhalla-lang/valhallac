@@ -1,4 +1,4 @@
-use valhalla;
+use valhallac;
 use std::env;
 
 fn is_vh_file(filename : &String) -> bool {
@@ -11,6 +11,6 @@ pub fn main() {
     let files = args.filter(is_vh_file);
 
     for file in files {
-        valhalla::parse(&file);
+        valhallac::parse(&file);
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "valhalla"
+name = "valhallac"
 description = "Valhalla Language frontend, parser and  AST compiler."
 homepage = "https://knutsen.co"
 repository    = "https://github.com/Demonstrandum/valhalla"
@@ -14,11 +14,11 @@ authors = ["Demonstrandum <moi@knutsen.co>"]
 edition = "2018"
 
 [lib]
-name = "valhalla"
+name = "valhallac"
 path = "src/lib.rs"
 
 [[bin]]
-name = "valhalla"
+name = "valhallac"
 path = "src/bin.rs"
 
 [dependencies]
