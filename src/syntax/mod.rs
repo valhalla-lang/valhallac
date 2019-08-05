@@ -38,7 +38,7 @@ pub fn parse_file(filename : &str) -> ast::Root {
     println!("Stream:\n{}\n", stream.to_string());
 
     let mut tree = parser::parse(stream, filename);
-    println!("AST:\n{}\n", tree);
     analyser::replace(&mut tree);
+    println!("AST:\n{}\n", tree);
     tree
 }

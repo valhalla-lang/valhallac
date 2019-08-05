@@ -216,8 +216,6 @@ pub struct CallNode {
     /// Pointer to list of operand nodes.
     pub operands : Vec<Nodes>,
 
-    /// What type its operand is.
-    pub operand_type : StaticTypes,
     /// What type it returns.
     pub return_type : StaticTypes
 }
@@ -253,6 +251,17 @@ pub enum StaticTypes {
 
     TNil,
     TUnknown
+}
+
+impl StaticTypes {
+    pub fn is_number(&self) -> bool {
+        match self {
+            StaticTypes::TNatural
+            | StaticTypes::TInteger
+            | StaticTypes::TReal => true,
+            _ => false
+        }
+    }
 }
 
 impl fmt::Display for StaticTypes {
@@ -331,11 +340,18 @@ impl Nodes {
             Nodes::Str(_) => StaticTypes::TString,
             Nodes::Sym(_) => StaticTypes::TSymbol,
             Nodes::Ident(i) => i.static_type.clone(),
-            Nodes::Call(c) => StaticTypes::TFunction(
-                Box::new(c.operand_type.clone()),
-                Box::new(c.return_type.clone())),
+            Nodes::Call(c) => c.return_type.clone(),
 
             _ => StaticTypes::TUnknown
+        }
+    }
+
+    pub fn get_name(&self) -> Option<&str> {
+        match self {
+            Nodes::Str(n)   => Some(n.value.as_str()),
+            Nodes::Sym(n)   => Some(n.value.as_str()),
+            Nodes::Ident(n) => Some(n.value.as_str()),
+            _ => None
         }
     }
 
@@ -397,9 +413,12 @@ impl CallNode {
         Nodes::Call(CallNode {
             callee: Box::new(callee),
             operands: operands,
-            operand_type: StaticTypes::TUnknown,
             return_type: StaticTypes::TUnknown
         })
+    }
+
+    pub fn set_return_type(&mut self, new_type : StaticTypes) {
+        self.return_type = new_type;
     }
 
     pub fn is_unary(&self) -> bool {

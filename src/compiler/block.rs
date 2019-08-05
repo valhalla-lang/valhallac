@@ -38,7 +38,8 @@ pub struct LocalBlock<'a> {
     constants : Vec<Element<'a>>,
     instructions : Vec<Instr>,
     globals : Vec<String>,
-    pub return_type : ast::StaticTypes,
+    pub operand_type : ast::StaticTypes,
+    pub return_type  : ast::StaticTypes,
 
     // Used only for compilation:
     locals_map : HashMap<String, u16>,
@@ -61,7 +62,8 @@ impl<'a> LocalBlock<'a> {
             constants: vec![],
             instructions: vec![],
             globals: vec![],
-            return_type: ast::StaticTypes::TUnknown,
+            operand_type: ast::StaticTypes::TUnknown,
+            return_type:  ast::StaticTypes::TUnknown,
 
             locals_map: HashMap::new(),
             types_to_check: VecDeque::new(),
@@ -88,11 +90,16 @@ impl<'a> LocalBlock<'a> {
         self.locals_map.insert(left.value.to_owned(), index);
 
         self.emit(right);
-        if left.static_type == ast::StaticTypes::TUnknown {
+        if left.static_type == ast::StaticTypes::TUnknown
+        || left.static_type != right.yield_type() {
             self.instructions.push(Instr::Operator(Operators::DUP as u8));
             let type_node = self.types_to_check.pop_front().unwrap().1;
             self.emit(type_node);
             self.instructions.push(Instr::Operator(Operators::CHECK_TYPE as u8));
+        } else {  // Otherwise just pop, type was already checked statically so
+                  //  its of no use to include in the compiled program,
+                  //  as no dynamic checking is needed.
+            self.types_to_check.pop_front();
         }
         self.instructions.push(Instr::Operator(Operators::STORE_LOCAL as u8));
         self.instructions.push(Instr::Operand(index));
@@ -138,10 +145,38 @@ impl<'a> LocalBlock<'a> {
                         &call_node.operands[0],                        // right
                     ];
 
+                    // Check for cast.
+                    if ident.value == "cast" {
+                        self.emit(args[0]);
+                        self.instructions.push(Instr::Operator(Operators::CAST as u8));
+
+                        if let Some(cast_name) = args[1].get_name() {
+                            let cast_to : u16 = match cast_name {
+                                "Real" => 0b00000011,
+                                "Int"  => 0b00000010,
+                                "Nat"  => 0b00000001,
+                                _ => issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
+                                    "Compiler does not know how to cast to `{}'.", cast_name)
+                            };
+                            let cast_from = match args[0].yield_type() {
+                                ast::StaticTypes::TReal    => 0b00000011,
+                                ast::StaticTypes::TInteger => 0b00000010,
+                                ast::StaticTypes::TNatural => 0b00000001,
+                                _ => issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
+                                    "Compiler does not know how to cast from `{}'.", args[0].yield_type())
+                            };
+                            self.instructions.push(Instr::Operand(cast_from << 8 | cast_to));
+                        } else {
+                            issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                                "Cast-type provided to `cast' has to be a type-name.")
+                        }
+                        return;
+                    }
+
                     // Check for assignment.
                     if ident.value == "=" {
                         // Direct variable assignment:
-                        if let Some(left) = args[0].ident() {
+                        if let ast::Nodes::Ident(left) = args[0] {
                             self.ident_assignment(left, args[1]);
                         }
                         return;

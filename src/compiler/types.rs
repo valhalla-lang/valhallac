@@ -47,7 +47,10 @@ impl<'a> Set<'a> {
                 ast::StaticTypes::TString  => is_elem!(e, Element::EString),
                 ast::StaticTypes::TFunction(o, r) => {
                     match e {
-                        Element::ECode(code) => code.return_type == **r,
+                        Element::ECode(code) => {
+                            code.return_type == **r
+                            && code.operand_type == **o
+                        },
                         _ => false
                     }
                 },

@@ -13,6 +13,9 @@ pub fn get_internal_op(ident : &str, args : Option<&Vec<&ast::Nodes>>) -> Option
         let unwrapped = args.unwrap();
         first = unwrapped[0].yield_type();
         is_uni = !unwrapped.iter().all(|e| e.yield_type() == first);
+        // for n in unwrapped {
+        //     println!("\n|||\n{} -> {}\n|||\n", n, n.yield_type());
+        // }
     }
 
     match ident {
