@@ -6,13 +6,18 @@ use super::ast;
 /// instead.  This function takes a node and recurses down, looking
 /// for arithmetic operations containing exactly two numeric type nodes
 /// as operands, and performs the stated operation.
-
 fn const_fold(node : &ast::Nodes) -> ast::Nodes {
     if let ast::Nodes::Call(call) = node {
         if call.is_binary() {
             let bin_op = call.callee.call().unwrap().callee.ident().unwrap();
             let left  = const_fold(&call.callee.call().unwrap().operands[0]);
-            let right = const_fold(&call.operands[0].clone());
+            let right = const_fold(&call.operands[0]);
+
+            let default = ast::CallNode::new(
+                ast::CallNode::new(
+                    const_fold(&*call.callee.call().unwrap().callee),
+                    vec![left.clone()]),
+                vec![right.clone()]);
 
             let is_num_left  =  left.num().is_some();
             let is_num_right = right.num().is_some();
@@ -26,15 +31,17 @@ fn const_fold(node : &ast::Nodes) -> ast::Nodes {
                     "*" => l_value * r_value,
                     "/" => {
                         if r_value == ast::Numerics::Natural(0) {
-                            return node.clone();
+                            return default;
                         }
                         l_value / r_value
                     },
                     _ => {
-                        return node.to_owned();
+                        return default;
                     }
                 };
                 return ast::Nodes::Num(ast::NumNode { value });
+            } else {
+                return default;
             }
         }
         return ast::CallNode::new(
