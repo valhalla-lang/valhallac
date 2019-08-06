@@ -275,7 +275,7 @@ impl fmt::Display for StaticTypes {
             StaticTypes::TSet(st) => format!("Set({})", st),
             StaticTypes::TFunction(o, r) => format!("Function({}, {})", o, r),
             StaticTypes::TNil     => "Nil".to_string(),
-            StaticTypes::TUnknown => "Unknown".to_string(),
+            StaticTypes::TUnknown => "Dynamic".to_string(),
         };
         write!(f, "{}", s)
     }
@@ -298,13 +298,14 @@ pub enum Nodes {
 
 impl fmt::Display for Nodes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let yt = self.yield_type();
         let printable = match self {
-            Nodes::Ident(node)  => format!("%ident{{ :value \"{}\" }}", node.value),
-            Nodes::Num(node)    => format!("%num{{ :value {} }}", node.value),
-            Nodes::Str(node)    => format!("%str{{ :value \"{}\" }}", node.value),
-            Nodes::Sym(node)    => format!("%sym{{ :value \":{}\" }}", node.value),
+            Nodes::Ident(node)  => format!("%ident{{ :value \"{}\"; :yield :{} }}", node.value, yt),
+            Nodes::Num(node)    => format!("%num{{ :value {}; :yield :{} }}", node.value, yt),
+            Nodes::Str(node)    => format!("%str{{ :value \"{}\"; :yield :{} }}", node.value, yt),
+            Nodes::Sym(node)    => format!("%sym{{ :value \":{}\"; :yield :{} }}", node.value, yt),
             Nodes::Call(node)   => format!(
-                "%call{{\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", node.callee,
+                "%call{{\n  :yield :{}\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", yt, node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
             Nodes::Block(_)     => format!("%block{{ ... }}"),
             Nodes::Line(node)   => format!("%newline{{ :line {} }}", node.line),
@@ -460,8 +461,9 @@ pub fn pretty_print(node : &Nodes, depth : usize) -> String {
     let tab = TAB.repeat(depth);
     let printable = match node {
             Nodes::Call(n) => format!(
-                "{tab}%call{{\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operand [|{op}|]\n{tab}}}",
+                "{tab}%call{{\n{tab}{T}:yield :{yt}\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operand [|{op}|]\n{tab}}}",
                 tab=tab, T=TAB,
+                yt=node.yield_type(),
                 calling=pretty_print(&*n.callee, depth + 2),
                 op=(if n.operands.is_empty() { String::from(" ") } else { format!(
                     "\n{ops}\n{tab}{T}",

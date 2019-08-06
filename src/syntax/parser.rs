@@ -189,7 +189,7 @@ impl<'a> ParseEnvironment<'a> {
                 left = self.func_apply(left);
             }
         }
-        if !left.call().unwrap().is_binary() { return left; }
+        if left.call().is_none() || !left.call().unwrap().is_binary() { return left; }
         if let Some(call_ident) = left.call().unwrap().callee.call().unwrap().callee.ident() {
             if call_ident.value == ":" {
                 self.annotations.push_back(left.call().unwrap().clone());

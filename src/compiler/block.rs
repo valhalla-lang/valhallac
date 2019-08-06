@@ -112,6 +112,13 @@ impl<'a> LocalBlock<'a> {
     fn emit(&mut self, node : &'a ast::Nodes) {
         match node {
             ast::Nodes::Line(line_node) => {
+                let len = self.instructions.len();
+                if len > 1 {
+                    if self.instructions[len - 2] == Instr::Operator(Operators::SET_LINE as u8) {
+                        self.instructions.pop();
+                        self.instructions.pop();
+                    }
+                }
                 self.current_line = line_node.line;
                 self.instructions.push(Instr::Operator(Operators::SET_LINE as u8));
                 self.instructions.push(Instr::Operand(self.current_line as u16));

@@ -6,80 +6,44 @@ use super::ast;
 /// instead.  This function takes a node and recurses down, looking
 /// for arithmetic operations containing exactly two numeric type nodes
 /// as operands, and performs the stated operation.
-fn constant_fold(node : &ast::Nodes) -> Option<ast::Nodes> {
-    if node.num().is_some() { return Some(node.clone()); }
-    if node.call().is_some() && node.call().unwrap().is_binary() {
-        let operation = node.call().unwrap().callee.call().unwrap().callee.ident();
-        if let Some(op) = operation {
-            match op.value.as_str() {
-                "+" | "-" | "*" | "/" => (),
-                _ => {
-                    let mut new_call = *node.call().unwrap().callee.clone();
-                    let mut new_op   = node.call().unwrap().operands[0].clone();
 
-                    let maybe_call = constant_fold(&new_call);
-                    let maybe_op   = constant_fold(&new_op);
+fn const_fold(node : &ast::Nodes) -> ast::Nodes {
+    if let ast::Nodes::Call(call) = node {
+        if call.is_binary() {
+            let bin_op = call.callee.call().unwrap().callee.ident().unwrap();
+            let left  = const_fold(&call.callee.call().unwrap().operands[0]);
+            let right = const_fold(&call.operands[0].clone());
 
-                    if let Some(call) = maybe_call {
-                        new_call = call;
+            let is_num_left  =  left.num().is_some();
+            let is_num_right = right.num().is_some();
+
+            if is_num_left && is_num_right {
+                let l_value =  left.num().unwrap().value;
+                let r_value = right.num().unwrap().value;
+                let value = match bin_op.value.as_str() {
+                    "+" => l_value + r_value,
+                    "-" => l_value - r_value,
+                    "*" => l_value * r_value,
+                    "/" => {
+                        if r_value == ast::Numerics::Natural(0) {
+                            return node.clone();
+                        }
+                        l_value / r_value
+                    },
+                    _ => {
+                        return node.to_owned();
                     }
-                    if maybe_op.is_some() {
-                        new_op = maybe_op.unwrap();
-                    }
-                    return Some(ast::CallNode::new(new_call, vec![new_op]));
-                }
+                };
+                return ast::Nodes::Num(ast::NumNode { value });
             }
-            let right = node.call().unwrap().operands.get(0);
-            let left = node.call().unwrap().callee.call().unwrap().operands.get(0);
-
-            if left.is_none()
-            || right.is_none()
-            { return None; }
-
-            let l_value;
-            let r_value;
-
-            if left.unwrap().num().is_some()
-            && right.unwrap().num().is_some() {
-                l_value = left.unwrap().num().unwrap().value;
-                r_value = right.unwrap().num().unwrap().value;
-            } else {
-                let mut l = constant_fold(left.unwrap());
-                let mut r = constant_fold(right.unwrap());
-                if l.is_none() && r.is_none() { return None; }
-                if l.is_some() {
-                    r = Some(right.unwrap().clone());
-                } else {
-                    l = Some(left.unwrap().clone());
-                }
-
-                let foldl = constant_fold(&l.unwrap());
-                let foldr = constant_fold(&r.unwrap());
-                if foldl.is_none() || foldr.is_none() { return None; }
-
-                l_value = foldl.unwrap().num().unwrap().value;
-                r_value = foldr.unwrap().num().unwrap().value;
-            }
-            let value = match op.value.as_str() {
-                "+" => l_value + r_value,
-                "-" => l_value - r_value,
-                "*" => l_value * r_value,
-                "/" => {
-                    if r_value == ast::Numerics::Natural(0) {
-                        return Some(ast::CallNode::new(
-                                ast::CallNode::new(ast::IdentNode::new("/"),
-                                    vec![ast::Nodes::Num(ast::NumNode { value : l_value })]),
-                                vec![ast::NumNode::new(0)]));
-                    }
-                    l_value / r_value
-                },
-                _ => return None
-            };
-            return Some(ast::Nodes::Num(ast::NumNode { value }));
         }
+        return ast::CallNode::new(
+            const_fold(&*call.callee),
+            vec![const_fold(&call.operands[0])]);
     }
-    None
+    return node.to_owned();
 }
+
 
 fn create_cast(node : &ast::Nodes, cast : &ast::StaticTypes) -> ast::Nodes {
     let to_type = match cast {
@@ -100,7 +64,7 @@ fn create_cast(node : &ast::Nodes, cast : &ast::StaticTypes) -> ast::Nodes {
     cast_node
 }
 
-fn cast_strenght(st : &ast::StaticTypes) -> i32 {
+fn cast_strength(st : &ast::StaticTypes) -> i32 {
     match st {
         ast::StaticTypes::TReal    => 4,
         ast::StaticTypes::TInteger => 2,
@@ -126,9 +90,9 @@ fn balance_types(node : &ast::Nodes) -> ast::Nodes {
             let right_yield = right.yield_type();
             if ["+", "-", "*", "/"].contains(&bin_op.value.as_str()) {
                 if left_yield.is_number() && right_yield.is_number() {
-                    if cast_strenght(&left_yield) != cast_strenght(&right_yield) {
+                    if cast_strength(&left_yield) != cast_strength(&right_yield) {
 
-                        let casting_right = cast_strenght(&left_yield) >  cast_strenght(&right_yield);
+                        let casting_right = cast_strength(&left_yield) >  cast_strength(&right_yield);
                         let cast_to = (if casting_right { &left } else { &right }).yield_type();
 
                         let mut new_call;
@@ -157,7 +121,7 @@ fn balance_types(node : &ast::Nodes) -> ast::Nodes {
                 }
             } else if bin_op.value == "=" {
                 if left_yield.is_number() {
-                    if cast_strenght(&left_yield) > cast_strenght(&right_yield) {
+                    if cast_strength(&left_yield) > cast_strength(&right_yield) {
                         let mut new_call = ast::CallNode::new(
                             *call.callee.clone(),
                             vec![create_cast(&right, &left_yield)]);
@@ -175,6 +139,7 @@ fn balance_types(node : &ast::Nodes) -> ast::Nodes {
         if let ast::Nodes::Call(ref mut c) = non_bi {
             c.set_return_type(node.yield_type());
         }
+        return non_bi;
     }
     return node.to_owned();
 }
@@ -184,10 +149,8 @@ pub fn replace(root : &mut ast::Root) {
     let mut i = 0;
     while i < length {
         { // START TOP-LEVEL CONSTANT FOLD
-            let new = constant_fold(&root.branches[i]);
-            if let Some(branch) = new {
-                root.branches[i] = branch;
-            }
+            let new = const_fold(&root.branches[i]);
+            root.branches[i] = new;
         } // END TOP-LEVEL CONSTANT FOLD
         { // START TOP-LEVEL TYPE BALANCING
             let new = balance_types(&root.branches[i]);
