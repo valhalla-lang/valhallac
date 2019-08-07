@@ -331,8 +331,8 @@ impl Nodes {
     /// of any syntactic node generated.
     pub fn yield_type(&self) -> StaticTypes {
         match self {
-            Nodes::Num(nn) => {
-                match nn.value {
+            Nodes::Num(num) => {
+                match num.value {
                     Numerics::Natural(_) => StaticTypes::TNatural,
                     Numerics::Integer(_) => StaticTypes::TInteger,
                     Numerics::Real(_)    => StaticTypes::TReal,
@@ -340,9 +340,40 @@ impl Nodes {
             },
             Nodes::Str(_) => StaticTypes::TString,
             Nodes::Sym(_) => StaticTypes::TSymbol,
-            Nodes::Ident(i) => i.static_type.clone(),
-            Nodes::Call(c) => c.return_type.clone(),
-
+            Nodes::Ident(ident) => {
+                match ident.value.as_str() {
+                    "Nat"  => StaticTypes::TSet(Box::new(StaticTypes::TNatural)),
+                    "Int"  => StaticTypes::TSet(Box::new(StaticTypes::TInteger)),
+                    "Real" => StaticTypes::TSet(Box::new(StaticTypes::TReal)),
+                    "Universal" => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
+                    _ => ident.static_type.to_owned()
+                }
+            },
+            Nodes::Call(call) => {
+                match &*call.callee {
+                    Nodes::Ident(ident) => {
+                        match ident.value.as_str() {
+                            "Set" => return StaticTypes::TSet(Box::new(call.operands[0].yield_type())),
+                            _ => ()
+                        };
+                    },
+                    Nodes::Call(sub_call) => {
+                        if let Nodes::Ident(ident) = &*sub_call.callee {
+                            match ident.value.as_str() {
+                                "->" => {
+                                    return StaticTypes::TFunction(
+                                        Box::new(sub_call.operands[0].yield_type()),
+                                        Box::new(call.operands[0].yield_type())
+                                    );
+                                },
+                                _ => ()
+                            }
+                        }
+                    }
+                    _ => ()
+                };
+                call.return_type.to_owned()
+            },
             _ => StaticTypes::TUnknown
         }
     }

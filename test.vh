@@ -1,8 +1,5 @@
-a : Nat
-a = 3 + 9
+a : Set Nat
+a = Nat
 
-b : Real
-b = a + 4
-
-c : XyZ
-c = hello (3 * 8)
+b : a
+b = 6 * 7

@@ -7,6 +7,8 @@ use std::io::{BufRead, BufReader};
 use colored;
 use colored::*;
 
+use unindent::unindent;
+
 #[allow(non_camel_case_types)]
 pub struct NO_TOKEN;
 
@@ -33,7 +35,8 @@ pub fn tissue(class : Types, filename : &str, token : &token::Token,  message : 
     let file = fs::File::open(filename).expect("Invalid filename for error message.");
     let line = BufReader::new(file).lines().nth((token.location.line - 1) as usize).unwrap().unwrap();
 
-    eprintln!("{}{} {}", "issue".bold().red(), ":".white(), message);
+    let unindented = unindent(message);
+    eprintln!("{}{} {}", "issue".bold().red(), ":".white(), unindented.bold());
     eprint!("{}", "".clear());
     eprintln!(" ==> {class} in (`{file}`:{line}:{col}):\n{space}|\n{line_str}| {stuff}",
         class=class.to_string().bold(), file=filename, line=token.location.line,
@@ -48,7 +51,8 @@ pub fn lissue(class : Types, filename : &str, line_n : usize,  message : &str) {
     let file = fs::File::open(filename).expect("Invalid filename for error message.");
     let line = BufReader::new(file).lines().nth((line_n - 1) as usize).unwrap().unwrap();
 
-    eprintln!("{}{} {}", "issue".bold().red(), ":".white(), message.bold());
+    let unindented = unindent(message);
+    eprintln!("{}{} {}", "issue".bold().red(), ":".white(), unindented.bold());
     eprint!("{}", "".clear());
     eprintln!(" ==> {class} in (`{file}`:{line}):\n{space}|\n{line_str}| {stuff}",
         class=class.to_string().bold(), file=filename, line=line_n,
