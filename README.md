@@ -20,6 +20,7 @@ What's been done so far on the front-end:
   - [x] Error messages, with fancy line and column number and read-out of the source line.
   - [x] Constant folding optimisations on trivially deducible
         numeric computations at compile time.
+  - [x] Implicit compile-time type-casting in specific situations.
   - [ ] Macros (including macro definitions and macro application).
   - [ ] User-defined binary operators as aliases to functions.
 - [ ] Compiler (generating bytecode to assemble an executable file).

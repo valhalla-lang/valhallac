@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::cell::RefCell;
 
 use crate::err;
 
@@ -18,11 +19,15 @@ fn const_fold(node : &Nodes) -> Nodes {
             let left  = const_fold(&call.callee.call().unwrap().operands[0]);
             let right = const_fold(&call.operands[0]);
 
-            let default = ast::CallNode::new(
-                ast::CallNode::new(
-                    const_fold(&*call.callee.call().unwrap().callee),
-                    vec![left.clone()]),
-                vec![right.clone()]);
+            let default = Nodes::Call(ast::CallNode {
+                callee: Box::new(Nodes::Call(ast::CallNode {
+                    callee: Box::new(const_fold(&*call.callee.call().unwrap().callee)),
+                    operands: vec![left.clone()],
+                    return_type: call.callee.yield_type()
+                })),
+                operands: vec![right.clone()],
+                return_type: call.return_type.clone()
+            });
 
             let is_num_left  =  left.num().is_some();
             let is_num_right = right.num().is_some();
@@ -49,9 +54,11 @@ fn const_fold(node : &Nodes) -> Nodes {
                 return default;
             }
         }
-        return ast::CallNode::new(
-            const_fold(&*call.callee),
-            vec![const_fold(&call.operands[0])]);
+        return Nodes::Call(ast::CallNode {
+            callee: Box::new(const_fold(&*call.callee)),
+            operands: vec![const_fold(&call.operands[0])],
+            return_type: call.return_type.clone()
+        });
     }
     return node.to_owned();
 }
@@ -149,7 +156,7 @@ fn balance_types(node : &Nodes) -> Nodes {
             balance_types(&*call.callee),
             vec![balance_types(&call.operands[0])]);
         if let Nodes::Call(ref mut c) = non_bi {
-            c.set_return_type(node.yield_type());
+            c.set_return_type(call.return_type.clone());
         }
         return non_bi;
     }
@@ -158,11 +165,11 @@ fn balance_types(node : &Nodes) -> Nodes {
 
 type VarType = (String, ast::StaticTypes);
 
+#[derive(Clone)]
 struct TypeChecker {
-    source_line : usize,
-    source_file : String,
-    annotations : VecDeque<VarType>,
-    last_annotated : Option<VarType>,
+    pub source_line : usize,
+    pub source_file : String,
+    ident_map : HashMap<String, ast::StaticTypes>,
 }
 
 impl TypeChecker {
@@ -170,8 +177,7 @@ impl TypeChecker {
         Self {
             source_line: 0,
             source_file: String::from("UNANNOUNCED_FILE"),
-            annotations: VecDeque::new(),
-            last_annotated: None,
+            ident_map: HashMap::new(),
         }
     }
 
@@ -181,11 +187,11 @@ impl TypeChecker {
             Nodes::Line(l) => self.source_line = l.line,
             Nodes::File(f) => self.source_file = f.filename.to_owned(),
             Nodes::Ident(ref mut i) => {
-                for pairs in &self.annotations {
-                    if pairs.0 == i.value {
-                        if let ast::StaticTypes::TSet(class) = pairs.1.to_owned() {
-                            i.static_type = *class;
-                        }
+                if let Some(annotation) = self.ident_map.get(&i.value) {
+                    if let ast::StaticTypes::TSet(class) = annotation.clone() {
+                        i.static_type = *class;
+                    } else {
+                        i.static_type = annotation.clone();
                     }
                 }
                 return Nodes::Ident(i.to_owned());
@@ -200,12 +206,15 @@ impl TypeChecker {
                                         annotatee.value.to_owned(),
                                         self.type_branch(&call.operands[0]).yield_type()
                                     );
-                                    self.last_annotated = Some(annotation.clone());
-                                    self.annotations.push_back(annotation.clone());
+
+                                    self.ident_map.insert(annotation.0.clone(), annotation.1.clone());
 
                                     if let ast::StaticTypes::TSet(class) = annotation.1 {
                                         annotatee.static_type = *class;
+                                    } else {
+                                        // Error, can only be element of set.
                                     }
+
                                     return clone;
                                 } else {
                                     // Error: We need the left to be an ident.
@@ -216,12 +225,82 @@ impl TypeChecker {
                                          Only variable names can be declared as being members of sets.");
                                 }
                             },
+                            "=" => {
+                                // This is useful for checking variables in functions.
+                                if let Nodes::Call(ref assignee) = callee.operands[0] {
+                                    // Check all the types in the annotation (A -> B -> C)
+                                    //  and match them to the arguments found on the left side
+                                    //  of the assignment (=). Compile these matches into a list
+                                    //  and pass that list into a new TypeChecker object which checks
+                                    //  the right hand side of the assignment, matching up the sub-scoped
+                                    //  variables.
+
+                                    // A -> B -> C -> D
+                                    // f a b c = d
+                                    // <=>
+                                    //              (A -> (B -> (C  -> D)))
+                                    // ( ((=) ( (((f a)    b)    c) )) d)
+                                    fn collect_args(s : &TypeChecker, call_node : &Nodes, operands : Vec<Nodes>) -> Vec<Nodes> {
+                                        let mut pushed = operands.clone();
+
+                                        if let Nodes::Call(call) = call_node {
+                                            pushed.insert(0, call.operands[0].clone());
+                                            return collect_args(s, &*call.callee, pushed);
+                                        }
+
+                                        if let Nodes::Ident(ident) = call_node {
+                                            pushed.insert(0, call_node.clone());
+                                            return pushed;
+                                        }
+                                        issue!(err::Types::ParseError,
+                                            s.source_file.as_str(),
+                                            err::NO_TOKEN, s.source_line,
+                                            "Function definition must have base caller be an identifier.");
+                                    }
+
+                                    let mut operands = collect_args(&self, &callee.operands[0], vec![]);
+                                    let mut func_checker = self.clone();
+
+                                    let maybe_type = self.ident_map.get(&operands.remove(0).ident().unwrap().value);
+                                    if maybe_type.is_none() {
+                                        issue!(err::Types::TypeError,
+                                            self.source_file.as_str(),
+                                            err::NO_TOKEN, self.source_line,
+                                            "Cannot find type annotation for this function.");
+                                    }
+                                    let mut t = maybe_type.unwrap().clone();
+
+                                    for operand in operands {
+                                        if let Nodes::Ident(ident) = operand {
+                                            if let ast::StaticTypes::TSet(f) = &t {
+                                                if let ast::StaticTypes::TFunction(i, o) = *f.clone() {
+                                                    func_checker.ident_map.insert(ident.value, *i.clone());
+                                                    t = *o.clone();
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    call.operands[0] = func_checker.type_branch(&call.operands[0]);
+                                    return clone;
+                                }
+                            }
                             _ => ()
                         }
                     }
                 }
+
                 call.callee = Box::new(self.type_branch(&*call.callee));
                 call.operands = vec![self.type_branch(&call.operands[0])];
+
+                if let ast::StaticTypes::TFunction(_, o) = call.callee.yield_type() {
+                    if let ast::StaticTypes::TSet(t) = *o {
+                        call.return_type = *t.clone();
+                    } else {
+                        call.return_type = *o.clone();
+                    }
+                }
+
                 return Nodes::Call(call.to_owned());
             },
             _ => ()

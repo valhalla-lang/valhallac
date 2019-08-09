@@ -1,5 +1,4 @@
-a : Set Nat
-a = Nat
+a : Nat -> Nat -> Int
+a n m = n + 2*m
 
-b : a
-b = 6 * 7
+a 1 2
