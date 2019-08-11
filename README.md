@@ -43,7 +43,7 @@ The VM, i.e. the backend for the language, is being developed independently
 and will have its own progress and check-list updates.
 
 ### Example of what the compiler currently does:
-[current_compiler_test.md](https://github.com/Demonstrandum/valhallac/current_compiler_test.md)
+[current_compiler_test.md](https://github.com/valhalla-lang/valhallac/blob/master/current_compiler_test.md)
 
 ### Description
 
