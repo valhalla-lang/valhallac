@@ -20,6 +20,6 @@ pub fn parse(filename : &str) {
 
 
     code_block.generate(&root.branches);
-    println!("Code Block:\n{}", code_block)
+    println!("Code Blocks:\n{}", code_block)
 }
 

@@ -5,6 +5,7 @@ use super::super::err;
 
 use super::super::syntax;
 use syntax::ast;
+use syntax::ast::Nodes;
 
 use super::element;
 use super::instructions;
@@ -29,12 +30,12 @@ pub fn numerics_to_element<'a>(num : &ast::Numerics) -> Element<'a> {
 }
 
 #[derive(Clone)]
-struct IdentTypePair<'a>(String, &'a ast::Nodes);
+struct IdentTypePair<'a>(String, &'a Nodes);
 
 #[derive(Clone)]
 pub struct LocalBlock<'a> {
-    pub name : &'a str,
-    filename : &'a str,
+    pub name : String,
+    filename : String,
     constants : Vec<Element<'a>>,
     instructions : Vec<Instr>,
     globals : Vec<String>,
@@ -55,10 +56,10 @@ impl<'a> PartialEq for LocalBlock<'a> {
 }
 
 impl<'a> LocalBlock<'a> {
-    pub fn new(name : &'a str, filename : &'a str) -> Self {
+    pub fn new(n : &str, f : &str) -> Self {
         LocalBlock {
-            name,
-            filename,
+            name: n.to_string(),
+            filename: f.to_string(),
             constants: vec![],
             instructions: vec![],
             globals: vec![],
@@ -72,46 +73,103 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn push_const_instr(&mut self, e : Element<'a>) {
-        let index = append_unique(&mut self.constants, e);
-        self.instructions.push(Instr::Operator(Operators::PUSH_CONST as u8));
-        self.instructions.push(Instr::Operand(index as u16));
+        let index = append_unique(&mut self.constants, e) as u16;
+        self.push_operator(Operators::PUSH_CONST);
+        self.push_operand(index);
     }
 
-    fn ident_assignment(&mut self, left : &ast::IdentNode, right : &'a ast::Nodes) {
+    fn push_operator(&mut self, o : Operators) {
+        self.instructions.push(Instr::Operator(o as u8));
+    }
+
+    fn push_operand(&mut self, i : u16) {
+        self.instructions.push(Instr::Operand(i));
+    }
+
+    fn insert_local(&mut self, s : String) -> u16 {
+        let index = self.locals_map.len() as u16;
+        self.locals_map.insert(s, index);
+        index
+    }
+
+    fn ident_assignment(&mut self, left : &'a ast::IdentNode, right : &'a Nodes) {
         if self.types_to_check.is_empty() {
-            issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
+            issue!(err::Types::TypeError, &self.filename, err::NO_TOKEN, self.current_line,
                 "You must state what set `{}' is a member of. No type-annotation found.", left.value);
         }
         if self.locals_map.contains_key(&left.value) {
-            issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
-                "Cannot mutate value of `{}', as is already bound.", left.value);
+            issue!(err::Types::CompError, &self.filename, err::NO_TOKEN, self.current_line,
+                "Cannot mutate value of `{}', as it is already bound.", left.value);
         }
-        let index = self.locals_map.len() as u16;
-        self.locals_map.insert(left.value.to_owned(), index);
+        let index = self.insert_local(left.value.to_owned());
 
         self.emit(right);
         if left.static_type == ast::StaticTypes::TUnknown
         || left.static_type != right.yield_type() {
-            self.instructions.push(Instr::Operator(Operators::DUP as u8));
+            self.push_operator(Operators::DUP);
             let type_node = self.types_to_check.pop_front().unwrap().1;
             self.emit(type_node);
-            self.instructions.push(Instr::Operator(Operators::CHECK_TYPE as u8));
+            self.push_operator(Operators::CHECK_TYPE);
         } else {  // Otherwise just pop, type was already checked statically so
                   //  its of no use to include in the compiled program,
                   //  as no dynamic checking is needed.
             self.types_to_check.pop_front();
         }
-        self.instructions.push(Instr::Operator(Operators::STORE_LOCAL as u8));
-        self.instructions.push(Instr::Operand(index));
+        self.push_operator(Operators::STORE_LOCAL);
+        self.push_operand(index);
     }
 
-    fn annotation(&mut self, left : &ast::IdentNode, right : &'a ast::Nodes) {
+    fn function_assign(&mut self, left : &ast::CallNode, right : &'a Nodes) {
+        let mut arguments = left.collect();
+        let base_node = arguments.remove(0);
+
+        if let Nodes::Ident(ident) = base_node {
+            let name = format!("{}__{}", ident.value.to_owned(), arguments.len() - 1);
+
+            let mut last_block = LocalBlock::new(&name, &self.filename);
+            // TODO: Be more careful here, not always an ident.
+            //  NEED TO DEAL WITH PATTERN MATCHING.
+            last_block.insert_local(arguments.last().unwrap().ident().unwrap().value.to_owned());
+            last_block.emit(right);
+
+            for i in (0..(arguments.len() - 1)).rev() {
+                let name = format!("{}__{}", ident.value, i);
+                let mut super_block = LocalBlock::new(
+                    &name,
+                    &self.filename);
+                // Also TODO: Pattern matching, be careful in the future.
+                super_block.insert_local(arguments[i].ident().unwrap().value.to_owned());
+
+                let block_name = last_block.name.clone();
+                super_block.push_const_instr(Element::ECode(last_block));
+                super_block.push_const_instr(Element::ESymbol(Symbol::new(&block_name)));
+                super_block.push_operator(Operators::MAKE_FUNC);
+                last_block = super_block;
+            }
+
+            let index = self.insert_local(ident.value.to_owned());
+
+            self.push_const_instr(Element::ECode(last_block));
+            self.push_const_instr(Element::ESymbol(Symbol::new(&ident.value)));
+            self.push_operator(Operators::MAKE_FUNC);
+            self.push_operator(Operators::STORE_LOCAL);
+            self.push_operand(index);
+            return;
+        }
+
+        // A function of multiple arguments (say 3 f.eks),
+        //  must generate a function, which when called returns
+        //  a function, and when that function is called, it returns
+        //  the final value.
+    }
+
+    fn annotation(&mut self, left : &ast::IdentNode, right : &'a Nodes) {
         self.types_to_check.push_back(IdentTypePair(left.value.to_owned(), right));
     }
 
-    fn emit(&mut self, node : &'a ast::Nodes) {
+    fn emit(&mut self, node : &'a Nodes) {
         match node {
-            ast::Nodes::Line(line_node) => {
+            Nodes::Line(line_node) => {
                 let len = self.instructions.len();
                 if len > 1 {
                     if self.instructions[len - 2] == Instr::Operator(Operators::SET_LINE as u8) {
@@ -120,31 +178,31 @@ impl<'a> LocalBlock<'a> {
                     }
                 }
                 self.current_line = line_node.line;
-                self.instructions.push(Instr::Operator(Operators::SET_LINE as u8));
-                self.instructions.push(Instr::Operand(self.current_line as u16));
+                self.push_operator(Operators::SET_LINE);
+                self.push_operand(self.current_line as u16);
             }
-            ast::Nodes::Ident(ident_node) => {
+            Nodes::Ident(ident_node) => {
                 let s = &ident_node.value;
                 if !self.locals_map.contains_key(s) {
-                    self.instructions.push(Instr::Operator(Operators::PUSH_SUPER as u8));
-                    let index = append_unique(&mut self.globals, s.to_owned());
-                    self.instructions.push(Instr::Operand(index as u16));
+                    self.push_operator(Operators::PUSH_SUPER);
+                    let index = append_unique(&mut self.globals, s.to_owned()) as u16;
+                    self.push_operand(index);
                     return;
                 }
 
-                self.instructions.push(Instr::Operator(Operators::PUSH_LOCAL as u8));
-                self.instructions.push(Instr::Operand(self.locals_map[s]));
+                self.push_operator(Operators::PUSH_LOCAL);
+                self.push_operand(self.locals_map[s]);
             },
-            ast::Nodes::Num(num_node) => {
+            Nodes::Num(num_node) => {
                 self.push_const_instr(numerics_to_element(&num_node.value));
             },
-            ast::Nodes::Str(str_node) => {
+            Nodes::Str(str_node) => {
                 self.push_const_instr(Element::EString(&str_node.value));
             },
-            ast::Nodes::Sym(sym_node) => {
+            Nodes::Sym(sym_node) => {
                 self.push_const_instr(Element::ESymbol(Symbol::new(&sym_node.value)));
             },
-            ast::Nodes::Call(call_node) => {
+            Nodes::Call(call_node) => {
                 if call_node.is_binary() {
                     let ident = call_node.callee.call().unwrap().callee.ident().unwrap();
                     let args = vec![
@@ -155,26 +213,26 @@ impl<'a> LocalBlock<'a> {
                     // Check for cast.
                     if ident.value == "cast" {
                         self.emit(args[0]);
-                        self.instructions.push(Instr::Operator(Operators::CAST as u8));
+                        self.push_operator(Operators::CAST);
 
                         if let Some(cast_name) = args[1].get_name() {
                             let cast_to : u16 = match cast_name {
                                 "Real" => 0b00000011,
                                 "Int"  => 0b00000010,
                                 "Nat"  => 0b00000001,
-                                _ => issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
+                                _ => issue!(err::Types::TypeError, &self.filename, err::NO_TOKEN, self.current_line,
                                     "Compiler does not know how to cast to `{}'.", cast_name)
                             };
                             let cast_from = match args[0].yield_type() {
                                 ast::StaticTypes::TReal    => 0b00000011,
                                 ast::StaticTypes::TInteger => 0b00000010,
                                 ast::StaticTypes::TNatural => 0b00000001,
-                                _ => issue!(err::Types::TypeError, self.filename, err::NO_TOKEN, self.current_line,
+                                _ => issue!(err::Types::TypeError, &self.filename, err::NO_TOKEN, self.current_line,
                                     "Compiler does not know how to cast from `{}'.", args[0].yield_type())
                             };
-                            self.instructions.push(Instr::Operand(cast_from << 8 | cast_to));
+                            self.push_operand(cast_from << 8 | cast_to);
                         } else {
-                            issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                            issue!(err::Types::CompError, &self.filename, err::NO_TOKEN, self.current_line,
                                 "Cast-type provided to `cast' has to be a type-name.")
                         }
                         return;
@@ -183,8 +241,10 @@ impl<'a> LocalBlock<'a> {
                     // Check for assignment.
                     if ident.value == "=" {
                         // Direct variable assignment:
-                        if let ast::Nodes::Ident(left) = args[0] {
+                        if let Nodes::Ident(left) = args[0] {
                             self.ident_assignment(left, args[1]);
+                        } else if let Nodes::Call(left) = args[0] {
+                            self.function_assign(left, args[1]);
                         }
                         return;
                     }
@@ -194,7 +254,7 @@ impl<'a> LocalBlock<'a> {
                         // If the LHS is not an ident, it is not a
                         //   valid annotation.
                         if args[0].ident().is_none() {
-                            issue!(err::Types::CompError, self.filename, err::NO_TOKEN, self.current_line,
+                            issue!(err::Types::CompError, &self.filename, err::NO_TOKEN, self.current_line,
                                 "Left of `:` type annotator must be an identifier.");
                         }
                         let left = args[0].ident().unwrap();
@@ -213,15 +273,18 @@ impl<'a> LocalBlock<'a> {
                         return;
                     }
                 }
+                // TODO: Optimise to implicitly ignore currying and use CALL_N instead.
+                //  Also, check that we are indeed calling a function, and not anything else
+                //  by checking the static yield type.
                 self.emit(&call_node.operands[0]);
                 self.emit(&*call_node.callee);
-                self.instructions.push(Instr::Operator(Operators::CALL_1 as u8));
+                self.push_operator(Operators::CALL_1);
             },
             _ => ()
         };
     }
 
-    pub fn generate(&mut self, nodes : &'a Vec<ast::Nodes>) {
+    pub fn generate(&mut self, nodes : &'a Vec<Nodes>) {
         for node in nodes {
             self.emit(node);
         }
@@ -230,21 +293,31 @@ impl<'a> LocalBlock<'a> {
 
 impl<'a> fmt::Display for LocalBlock<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "===Constants===============\n")?;
+        for c in &self.constants {
+            if let Element::ECode(local_block) = c {
+                write!(f, "{}", local_block)?;
+            }
+        }
+        write!(f, "\n{}:\n", self.name)?;
+        write!(f, "  | ===Constants===============\n")?;
         for (i, c) in self.constants.iter().enumerate() {
-            write!(f, "{: >3} |  {} |\n", i, c)?;
+            write!(f, "  | {: >3} |  {} |\n", i, c)?;
         }
-        write!(f, "===Locals==================\n")?;
+        write!(f, "  | ===Locals==================\n")?;
         for key in self.locals_map.keys() {
-            write!(f, "{: >3} |  {}\n", self.locals_map[key], key)?;
+            write!(f, "  | {: >3} |  {}\n", self.locals_map[key], key)?;
         }
-        write!(f, "===Globals=================\n")?;
+        write!(f, "  | ===Globals=================\n")?;
         for (i, c) in self.globals.iter().enumerate() {
-            write!(f, "{: >3} |  {}\n", i, c)?;
+            write!(f, "  | {: >3} |  {}\n", i, c)?;
         }
-        write!(f, "===Bytecodes===============\n")?;
+        write!(f, "  | ===Bytecodes===============\n")?;
         for inst in &self.instructions {
-            write!(f, "{}", inst)?;
+            if let Instr::Operand(_) = inst {
+                write!(f, "{}", inst)?;
+            } else {
+                write!(f, "  | {}", inst)?;
+            }
         }
         write!(f, "")
     }

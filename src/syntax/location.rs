@@ -1,4 +1,5 @@
 /// Holds line, column and span of a lexical token.
+#[derive(Clone)]
 pub struct Loc {
     /// Line number.
     pub line : u32,

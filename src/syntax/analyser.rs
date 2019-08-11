@@ -1,5 +1,4 @@
-use std::collections::{HashMap, VecDeque};
-use std::cell::RefCell;
+use std::collections::HashMap;
 
 use crate::err;
 
@@ -163,8 +162,6 @@ fn balance_types(node : &Nodes) -> Nodes {
     return node.to_owned();
 }
 
-type VarType = (String, ast::StaticTypes);
-
 #[derive(Clone)]
 struct TypeChecker {
     pub source_line : usize,
@@ -218,78 +215,97 @@ impl TypeChecker {
                                     return clone;
                                 } else {
                                     // Error: We need the left to be an ident.
-                                    issue!(err::Types::TypeError,
+                                    issue!(err::Types::ParseError,
                                         self.source_file.as_str(),
                                         err::NO_TOKEN, self.source_line,
                                         "The left side of the member-of operator (`:`), must be an identifier.
-                                         Only variable names can be declared as being members of sets.");
+                                         You supplied a type of `{}'.
+                                         Only variable names can be declared as being members of sets.",
+                                        callee.operands[0].node_type());
                                 }
                             },
                             "=" => {
                                 // This is useful for checking variables in functions.
-                                if let Nodes::Call(ref assignee) = callee.operands[0] {
-                                    // Check all the types in the annotation (A -> B -> C)
-                                    //  and match them to the arguments found on the left side
-                                    //  of the assignment (=). Compile these matches into a list
-                                    //  and pass that list into a new TypeChecker object which checks
-                                    //  the right hand side of the assignment, matching up the sub-scoped
-                                    //  variables.
+                                match &callee.operands[0] {
+                                    Nodes::Call(ref assignee) => {
+                                        // Check all the types in the annotation (A -> B -> C)
+                                        //  and match them to the arguments found on the left side
+                                        //  of the assignment (=). Compile these matches into a list
+                                        //  and pass that list into a new TypeChecker object which checks
+                                        //  the right hand side of the assignment, matching up the sub-scoped
+                                        //  variables.
 
-                                    // A -> B -> C -> D
-                                    // f a b c = d
-                                    // <=>
-                                    //              (A -> (B -> (C  -> D)))
-                                    // ( ((=) ( (((f a)    b)    c) )) d)
-                                    fn collect_args(s : &TypeChecker, call_node : &Nodes, operands : Vec<Nodes>) -> Vec<Nodes> {
-                                        let mut pushed = operands.clone();
+                                        // A -> B -> C -> D
+                                        // f a b c = d
+                                        // <=>
+                                        //              (A -> (B -> (C  -> D)))
+                                        // ( ((=) ( (((f a)    b)    c) )) d)
 
-                                        if let Nodes::Call(call) = call_node {
-                                            pushed.insert(0, call.operands[0].clone());
-                                            return collect_args(s, &*call.callee, pushed);
+                                        let mut operands = assignee.collect();
+                                        let mut func_checker = self.clone();
+
+                                        let base_node = operands.remove(0);
+                                        if base_node.ident().is_none() {
+                                            issue!(err::Types::ParseError,
+                                                &self.source_file, err::NO_TOKEN, self.source_line,
+                                                "Function definitions must have the defining function's base caller
+                                                be an identifier! You're trying to define a function that has
+                                                `{}' as base caller...", base_node.node_type());
                                         }
 
-                                        if let Nodes::Ident(ident) = call_node {
-                                            pushed.insert(0, call_node.clone());
-                                            return pushed;
+                                        let maybe_type = self.ident_map.get(&base_node.ident().unwrap().value);
+                                        if maybe_type.is_none() {
+                                            println!("{}", base_node);
+                                            println!("{:?}", self.ident_map);
+                                            issue!(err::Types::TypeError,
+                                                self.source_file.as_str(),
+                                                err::NO_TOKEN, self.source_line,
+                                                "Cannot find type annotation for the
+                                                 function definition of `{}'.",
+                                                 base_node.ident().unwrap().value);
                                         }
-                                        issue!(err::Types::ParseError,
-                                            s.source_file.as_str(),
-                                            err::NO_TOKEN, s.source_line,
-                                            "Function definition must have base caller be an identifier.");
-                                    }
+                                        let mut t = maybe_type.unwrap().clone();
 
-                                    let mut operands = collect_args(&self, &callee.operands[0], vec![]);
-                                    let mut func_checker = self.clone();
-
-                                    let maybe_type = self.ident_map.get(&operands.remove(0).ident().unwrap().value);
-                                    if maybe_type.is_none() {
-                                        issue!(err::Types::TypeError,
-                                            self.source_file.as_str(),
-                                            err::NO_TOKEN, self.source_line,
-                                            "Cannot find type annotation for this function.");
-                                    }
-                                    let mut t = maybe_type.unwrap().clone();
-
-                                    for operand in operands {
-                                        if let Nodes::Ident(ident) = operand {
-                                            if let ast::StaticTypes::TSet(f) = &t {
-                                                if let ast::StaticTypes::TFunction(i, o) = *f.clone() {
-                                                    func_checker.ident_map.insert(ident.value, *i.clone());
-                                                    t = *o.clone();
+                                        for operand in operands {
+                                            if let Nodes::Ident(ident) = operand {
+                                                if let ast::StaticTypes::TSet(f) = &t {
+                                                    if let ast::StaticTypes::TFunction(i, o) = *f.clone() {
+                                                        func_checker.ident_map.insert(ident.value, *i.clone());
+                                                        t = *o.clone();
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
 
-                                    call.operands[0] = func_checker.type_branch(&call.operands[0]);
-                                    return clone;
+                                        call.operands[0] = func_checker.type_branch(&call.operands[0]);
+                                        return clone;
+                                    }
+                                    Nodes::Ident(_assignee) => {
+                                        // TODO:
+                                        // Here, if the ident exists in the ident_map, that means
+                                        //  we need to check if both sides of the `=`'s types match up.
+                                        //  If it does not exist, we need to infer its type by looking at
+                                        //  the RHS and statically determine the RHS's type, and adding that
+                                        //  type to the ident_map for the assignee.
+                                    }
+                                    _ => ()
                                 }
                             }
                             _ => ()
                         }
                     }
                 }
-
+                // TODO HERE:
+                //  We need to check to see if the function being called
+                //  has a statically determined type, and if so, check that
+                //  the operand to that function call has the exact same
+                //  static type.
+                //  If there is a type-mismatch, just throw an `issue!`.
+                //  (If the function is statically typed, so
+                //    must all the arguments be as well).
+                //  The call must have a yield of type `function` and the
+                //  input part of the function (input |-> output), must match
+                //  the type of the operand.  :^)
                 call.callee = Box::new(self.type_branch(&*call.callee));
                 call.operands = vec![self.type_branch(&call.operands[0])];
 

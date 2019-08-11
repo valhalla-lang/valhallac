@@ -1,4 +1,5 @@
 use std::{fmt, ops};
+use std::collections::VecDeque;
 
 /// Identifiers, node representing a name that
 /// will represent a value stored.
@@ -266,16 +267,36 @@ impl StaticTypes {
 
 impl fmt::Display for StaticTypes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ss;
         let s = match self {
-            StaticTypes::TNatural => "Nat".to_string(),
-            StaticTypes::TInteger => "Int".to_string(),
-            StaticTypes::TReal    => "Real".to_string(),
-            StaticTypes::TString  => "Str".to_string(),
-            StaticTypes::TSymbol  => "Sym".to_string(),
-            StaticTypes::TSet(st) => format!("Set {}", st),
-            StaticTypes::TFunction(o, r) => format!("({} -> {})", o, r),
-            StaticTypes::TNil     => "Nil".to_string(),
-            StaticTypes::TUnknown => "Universal".to_string(),
+            StaticTypes::TNatural => "natural",
+            StaticTypes::TInteger => "integer",
+            StaticTypes::TReal    => "real",
+            StaticTypes::TString  => "string",
+            StaticTypes::TSymbol  => "symbol",
+            StaticTypes::TSet(st) => match *st.clone() {
+                StaticTypes::TNatural => "Nat",
+                StaticTypes::TInteger => "Int",
+                StaticTypes::TReal    => "Real",
+                StaticTypes::TString  => "Str",
+                StaticTypes::TSymbol  => "Sym",
+                StaticTypes::TFunction(o, r) => {
+                    ss = format!("({} \u{1f852} {})", o, r);
+                    ss.as_str()
+                },
+                StaticTypes::TNil     => "Nil",
+                StaticTypes::TUnknown => "Any",
+                _ => {
+                    ss = format!("Set {}", st);
+                    ss.as_str()
+                },
+            },
+            StaticTypes::TFunction(o, r) => {
+                ss = format!("({} \u{21a6} {})", o, r);
+                ss.as_str()
+            },
+            StaticTypes::TNil     => "nil",
+            StaticTypes::TUnknown => "anything",
         };
         write!(f, "{}", s)
     }
@@ -345,7 +366,10 @@ impl Nodes {
                     "Nat"  => StaticTypes::TSet(Box::new(StaticTypes::TNatural)),
                     "Int"  => StaticTypes::TSet(Box::new(StaticTypes::TInteger)),
                     "Real" => StaticTypes::TSet(Box::new(StaticTypes::TReal)),
-                    "Universal" => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
+                    "Str"  => StaticTypes::TSet(Box::new(StaticTypes::TString)),
+                    "Sym"  => StaticTypes::TSet(Box::new(StaticTypes::TSymbol)),
+                    "Nil"  => StaticTypes::TSet(Box::new(StaticTypes::TNil)),
+                    "Any" => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
                     _ => ident.static_type.to_owned()
                 }
             },
@@ -386,6 +410,19 @@ impl Nodes {
             Nodes::Ident(i) => i.static_type = new_yield,
             Nodes::Call(c)  => c.return_type = new_yield,
             _ => panic!("Cannot change static yield type of node with inherent type.")
+        }
+    }
+
+    pub fn node_type(&self) -> &str {
+        match self {
+            Nodes::Ident(_) => "identifier",
+            Nodes::Num(_)   => "numeric",
+            Nodes::Str(_)   => "string",
+            Nodes::Sym(_)   => "symbol",
+            Nodes::Empty(_) => "empty",
+            Nodes::Call(_)  => "function-call",
+            Nodes::Block(_) => "code-block",
+            _ => "ungrammatical-meta-node"
         }
     }
 
@@ -462,6 +499,22 @@ impl CallNode {
 
     pub fn set_return_type(&mut self, new_type : StaticTypes) {
         self.return_type = new_type;
+    }
+
+    pub fn collect(&self) -> Vec<Nodes> {
+        fn make_argument_vector(call_node : &Nodes, operands : VecDeque<Nodes>) -> VecDeque<Nodes> {
+            let mut pushable = operands.clone();
+
+            if let Nodes::Call(call) = call_node {
+                pushable.push_front(call.operands[0].clone());
+                return make_argument_vector(&*call.callee, pushable);
+            }
+
+            pushable.push_front(call_node.clone());
+            return pushable;
+        }
+        let q = make_argument_vector(&Nodes::Call(self.clone()), VecDeque::new());
+        Vec::from(q)
     }
 
     pub fn is_unary(&self) -> bool {

@@ -7,10 +7,10 @@ use snailquote::escape;
 use super::block;
 use super::types;
 
-#[derive(Clone, Copy)]
-pub struct Symbol<'a> {
+#[derive(Clone)]
+pub struct Symbol {
     hash : u64,
-    string : &'a str
+    string : String
 }
 
 fn hash_symbol(string : &str) -> u64 {
@@ -19,22 +19,22 @@ fn hash_symbol(string : &str) -> u64 {
     s.finish()
 }
 
-impl<'a> Symbol<'a> {
-    pub fn new(string : &'a str) -> Self {
+impl Symbol {
+    pub fn new(s : &str) -> Self {
         Symbol {
-            hash: hash_symbol(string),
-            string
+            hash: hash_symbol(s),
+            string: s.to_owned()
         }
     }
 }
 
-impl<'a> fmt::Display for Symbol<'a> {
+impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, ":{}", self.string)
     }
 }
 
-impl<'a> PartialEq for Symbol<'a> {
+impl PartialEq for Symbol {
     fn eq(&self, other : &Self) -> bool {
         self.hash == other.hash
     }
@@ -46,7 +46,7 @@ pub enum Element<'a> {
     EInteger(isize),
     EReal(f64),
     EString(&'a str),
-    ESymbol(Symbol<'a>),
+    ESymbol(Symbol),
     ECode(block::LocalBlock<'a>),
     ESet(types::Set<'a>),
     ENil

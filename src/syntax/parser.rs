@@ -13,6 +13,7 @@ pub fn parse(stream : Vec<Token>, file : &str) -> ast::Root {
 
     environment.start();
 
+
     environment.root
 }
 
@@ -24,13 +25,15 @@ struct ParseEnvironment<'a> {
 
     ignore_newline : bool,
     line_number : usize,
+    eof_token : Token
 }
 
 impl<'a> ParseEnvironment<'a> {
     pub fn new(stream : Vec<Token>, file : &'a str) -> Self {
         ParseEnvironment {
             root: ast::Root::new(),
-            stream: stream,
+            eof_token: stream.last().unwrap().to_owned(),
+            stream,
             optable: operators::PrecedenceTable::new(),
             file,
 
@@ -53,10 +56,13 @@ impl<'a> ParseEnvironment<'a> {
             self.root.branches.push(e);
             current = self.stream.get(0);
         }
-        //self.assign_types();
+        self.shift();
     }
 
     fn shift(&mut self) -> Token {
+        if self.stream.is_empty() {
+            self.stream.push(self.eof_token.clone());
+        }
         let shifted = self.stream.remove(0);
         if shifted.location.line as usize != self.line_number {
             if self.root.branches.last().is_some()
@@ -86,11 +92,15 @@ impl<'a> ParseEnvironment<'a> {
                             ast::IdentNode::new(&token.string)
                         },
                         _ => {
+                            // If the operator is prefix:
+                            //   e.g. -a  <=>  ((-) a)
+                            // Otherwise it's a partial application:
+                            //   e.g. (* a)  <=>  ((flip (*)) a)
                             if prefix.is_none() {
                                 ast::CallNode::new(
                                     ast::CallNode::new(
-                                        ast::IdentNode::new(&token.string),
-                                        vec![ast::EmptyNode::new()]),
+                                        ast::IdentNode::new("flip"),
+                                        vec![ast::IdentNode::new(&token.string)]),
                                     vec![self.expr(500)])
                             } else {
                                 ast::CallNode::new(

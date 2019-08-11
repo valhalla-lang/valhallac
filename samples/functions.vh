@@ -1,6 +1,15 @@
-plus : Nat -> Nat -> Nat
+a : Nat -> Nat -> Int
+a n m = n - 2*m
 
-postulate do:
-    plus n 0 = n
-    plus 0 n = n
-    plus (succ n) m = succ (plus n m)
+a 1 2
+
+-- a = n |-> (m |-> n - 2*m)
+--           |_____________|
+--                  |
+--               func: `a__1`
+--     |_____________________|
+--                |
+--             func: `a__0`
+-- |__________________________|
+--          |
+--       func: a

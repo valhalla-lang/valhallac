@@ -28,6 +28,12 @@ What's been done so far on the front-end:
         instructions as well as basic arithmetic.
   - [x] Access, assignment and retrieval of local variables within
         code-block scope.
+  - [x] Generating curried functions.
+  - [ ] Optimise functions to not curry when currying is not neccesary (by tracking arity of
+        function's definition and function's call).
+  - [ ] Optimise functions to not search globally for variables when they
+        come from nested closures (nested closures implement currying).
+  - [ ] Optimise functions for tail calls.
   - [ ] Track variable and function types.
   - [ ] Marshaling, i.e. serialising the bytecode and storing it in a file
         for future interpretation and execution by the virtual machine.
@@ -35,6 +41,9 @@ What's been done so far on the front-end:
 
 The VM, i.e. the backend for the language, is being developed independently
 and will have its own progress and check-list updates.
+
+### Example of what the compiler currently does:
+[current_compiler_test.md](https://github.com/Demonstrandum/valhallac/current_compiler_test.md)
 
 ### Description
 
@@ -57,3 +66,8 @@ verify proofs and such in and around set theory.
 The language is a general purpose, but instead of being totally object-oriented,
 or functional, etc., it's just set theory based.  From what I've
 gathered, it's not a very popular paradigm.
+
+### Dependencies
+Yikes...
+
+![deps](https://github.com/Demonstrandum/valhalla/raw/master/graph.png)

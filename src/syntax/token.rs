@@ -6,7 +6,7 @@ use unicode_width::UnicodeWidthStr;
 
 /// Contains all possible types/classes of
 /// lexiacal tokens.
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum TokenType {
     /// Identifiers, variables, function names etc.
     Ident,
@@ -67,6 +67,7 @@ impl fmt::Display for TokenType {
 /// Token structure, an individual lexiacal token,
 /// represented by its type/class, what it was written as
 /// in the program, and its location in the code.
+#[derive(Clone)]
 pub struct Token {
     /// What type/class of token it is.
     pub class  : TokenType,

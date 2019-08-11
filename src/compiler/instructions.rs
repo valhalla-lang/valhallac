@@ -42,6 +42,7 @@ pub enum Operators {
     CALL_1      = 9,
     CHECK_TYPE  = 10,
     CAST        = 11,
+    MAKE_FUNC   = 12,
 
     N_ADD       = 40,
     I_ADD       = 41,
@@ -82,6 +83,7 @@ impl fmt::Display for Operators {
             Operators::CALL_1      => "CALL_1\n",
             Operators::CHECK_TYPE  => "CHECK_TYPE\n",
             Operators::CAST        => "CAST",
+            Operators::MAKE_FUNC   => "MAKE_FUNC\n",
 
             Operators::N_ADD       => "N_ADD\n",
             Operators::I_ADD       => "I_ADD\n",
