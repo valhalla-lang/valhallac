@@ -1,8 +1,10 @@
 /// Holds line, column and span of a lexical token.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Loc {
     /// Line number.
     pub line : u32,
+    /// Number of lines.
+    pub lines : u32,
     /// Column number.
     pub col  : u32,
     /// Span/Width (in characters) of token.
@@ -11,6 +13,6 @@ pub struct Loc {
 
 /// Construct new Loc structure.
 pub fn new(line : u32, col : u32, span : u32) -> Loc {
-    Loc { line, col, span }
+    Loc { line, lines: 1, col, span }
 }
 

@@ -3,6 +3,7 @@ use token::{Token, TokenType};
 
 use super::location;
 
+use std::collections::VecDeque;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -52,7 +53,7 @@ macro_rules! try_match {
      $current_char_ptr:expr, $line:expr, $col:expr) => {
         if let Some(matched) = $reg.first_match($partial) {
             let span = matched.width() as u32;
-            $stream.push(Token::new(
+            $stream.push_back(Token::new(
                 $token_type, &matched,
                 location::new($line, $col, span)));
             $current_char_ptr += matched.len();
@@ -63,9 +64,9 @@ macro_rules! try_match {
 }
 
 /// Takes a piece of code (as a &str) and returns
-/// the generated token-stream (as a Vec<Token>).
-pub fn lex(string : &str) -> Vec<Token> {
-    let mut token_stream : Vec<Token> = Vec::new();
+/// the generated token-stream (as a VecDeque<Token>).
+pub fn lex(string : &str) -> VecDeque<Token> {
+    let mut token_stream : VecDeque<Token> = VecDeque::new();
 
     let mut current_char_ptr = 0;
     let string_size = string.bytes().count();
@@ -111,7 +112,7 @@ pub fn lex(string : &str) -> Vec<Token> {
               _  => None
         };
         if let Some(tt) = vec_brack {
-            token_stream.push(Token::new(
+            token_stream.push_back(Token::new(
                 tt, two_chars,
                 location::new(line, col, 2)));
             col += 2;
@@ -120,7 +121,7 @@ pub fn lex(string : &str) -> Vec<Token> {
         }
 
         if two_chars == ": " {
-            token_stream.push(Token::new(
+            token_stream.push_back(Token::new(
                 TokenType::Op, ":",
                 location::new(line, col, 1)));
             col += 2;
@@ -143,7 +144,7 @@ pub fn lex(string : &str) -> Vec<Token> {
         };
 
         if let Some(tt) = single_char_token {
-            token_stream.push(Token::new(
+            token_stream.push_back(Token::new(
                 tt, &first_char.to_string(),
                 location::new(line, col, 1)));
             if first_char == '\n' {
@@ -211,7 +212,7 @@ pub fn lex(string : &str) -> Vec<Token> {
                 current_char_ptr += 1;
                 col += 1;
             }
-            token_stream.push(Token::new(
+            token_stream.push_back(Token::new(
                 TokenType::Str, &contents,
                 location::new(line, old_col, col - old_col)));
             continue;
@@ -237,7 +238,7 @@ pub fn lex(string : &str) -> Vec<Token> {
         if partial.is_char_boundary(0) { col += 1 }
     }
 
-    token_stream.push(Token::new(
+    token_stream.push_back(Token::new(
         TokenType::EOF, "\0",
         location::new(line, col, 1)));
     token_stream

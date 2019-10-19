@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, collections::VecDeque};
 use super::location;
 
 use snailquote::escape;
@@ -117,7 +117,7 @@ pub trait ShowStream {
     /// String representation of token-stream.
     fn to_string(&self) -> String;
 }
-impl ShowStream for Vec<Token> {
+impl ShowStream for VecDeque<Token> {
     fn to_string(&self) -> String {
         let lines : Vec<String> = self.iter().map(Token::to_string).collect();
         format!("[ {} ]", lines.join(",\n  "))

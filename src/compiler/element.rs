@@ -67,14 +67,14 @@ impl<'a> Element<'a> {
 impl<'a> fmt::Display for Element<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            Element::ENatural(t) => format!("{: <5}  => (Nat)   ", t),
-            Element::EInteger(t) => format!("{: <5}  => (Int)   ", t),
-            Element::EReal(t)    => format!("{: <5}  => (Real)  ", if t.fract() == 0f64 { format!("{:.1}", t) } else { f64::to_string(t) }),
-            Element::EString(t)  => format!("{: <5}  => (String)", format!("\"{}\"", escape(t))),
-            Element::ESymbol(t)  => format!("{: <5}  => (Sym)   ", t.to_string()),
-            Element::ECode(t)    => format!("{: <5}  => (Block) ", t.name),
-            Element::ESet(t)     => format!("{: <5p}  => (Set)   ", t),
-            Element::ENil        => format!("{: <5}  => (Nil)   ", "nil"),
+            Element::ENatural(t) => format!("{: <13} (Nat) ", t),
+            Element::EInteger(t) => format!("{: <13} (Int) ", t),
+            Element::EReal(t)    => format!("{: <13} (Real)", if t.fract() == 0f64 { format!("{:.1}", t) } else { f64::to_string(t) }),
+            Element::EString(t)  => format!("{: <13} (Str) ", format!("\"{}\"", escape(t))),
+            Element::ESymbol(t)  => format!("{: <13} (Sym) ", t.to_string()),
+            Element::ECode(t)    => format!("{: <13} (Code)", t.name),
+            Element::ESet(t)     => format!("{: <13p} (Set) ", t),
+            Element::ENil        => format!("{: <13} (Nil) ", "nil"),
         };
         write!(f, "{}", s)
     }

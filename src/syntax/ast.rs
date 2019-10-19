@@ -1,6 +1,9 @@
 use std::{fmt, ops};
 use std::collections::VecDeque;
 
+use super::location;
+use location::Loc;
+
 /// Identifiers, node representing a name that
 /// will represent a value stored.
 #[derive(Clone)]
@@ -9,7 +12,10 @@ pub struct IdentNode {
     pub value : String,
 
     /// Type it holds.
-    pub static_type : StaticTypes
+    pub static_type : StaticTypes,
+
+    /// Source location.
+    pub location : Loc,
 }
 
 /// Different types of possible number types in the language.
@@ -189,7 +195,10 @@ impl fmt::Display for Numerics {
 #[derive(Clone)]
 pub struct NumNode {
     /// Holds a the numeric value.
-    pub value : Numerics
+    pub value : Numerics,
+
+    /// Source location.
+    pub location : Loc,
 }
 
 
@@ -197,7 +206,10 @@ pub struct NumNode {
 #[derive(Clone)]
 pub struct StrNode {
     /// Contents of the utf-8 string.
-    pub value : String
+    pub value : String,
+
+    /// Source location.
+    pub location : Loc,
 }
 
 /// Symbol Node.
@@ -205,7 +217,10 @@ pub struct StrNode {
 pub struct SymNode {
     /// Value/name stored as a string and
     /// excludes the colon (:) in front.
-    pub value : String
+    pub value : String,
+
+    /// Source location.
+    pub location : Loc,
 }
 
 /// Call Node has a pointer to the callee node
@@ -218,7 +233,10 @@ pub struct CallNode {
     pub operands : Vec<Nodes>,
 
     /// What type it returns.
-    pub return_type : StaticTypes
+    pub return_type : StaticTypes,
+
+    /// Source location.
+    pub location : Loc,
 }
 
 /// Represents a block of code / compound statements
@@ -226,21 +244,24 @@ pub struct CallNode {
 #[derive(Clone)]
 pub struct BlockNode {
     /// Pointer to list of nodes in the code block.
-    pub statements : Vec<Nodes>
-}
+    pub statements : Vec<Nodes>,
 
-#[derive(Clone)]
-pub struct LineNode {
-    pub line : usize
+    /// Source location.
+    pub location : Loc,
 }
 
 #[derive(Clone)]
 pub struct FileNode {
-    pub filename : String
+    pub filename : String,
+    /// Source location.
+    pub location : Loc,
 }
 
 #[derive(Clone)]
-pub struct EmptyNode;
+pub struct EmptyNode {
+    /// Source location.
+    pub location : Loc,
+}
 
 /// All base types, determined at compile time.
 #[derive(Debug, Clone, PartialEq)]
@@ -311,7 +332,6 @@ pub enum Nodes {
     Sym(SymNode),
     Call(CallNode),
     Block(BlockNode),
-    Line(LineNode),
     File(FileNode),
     Empty(EmptyNode),
 }
@@ -329,8 +349,7 @@ impl fmt::Display for Nodes {
                 "%call{{\n  :yield {}\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", yt, node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
             Nodes::Block(_)     => format!("%block{{ ... }}"),
-            Nodes::Line(node)   => format!("%newline{{ :line {} }}", node.line),
-            Nodes::File(node)   => format!("%newfile{{ :filename {} }}", node.filename),
+            Nodes::File(node)   => format!("%file{{ :filename {} }}", node.filename),
             Nodes::Empty(_)     => String::from("()"),
         };
         write!(f, "{}", printable)
@@ -348,6 +367,18 @@ macro_rules! unwrap_enum {
 
 
 impl Nodes {
+    pub fn location(&self) -> Loc {
+        match self {
+            Nodes::Ident(n) => n.location,
+            Nodes::Call(n)  => n.location,
+            Nodes::Num(n)   => n.location,
+            Nodes::Str(n)   => n.location,
+            Nodes::Sym(n)   => n.location,
+            Nodes::Empty(n) => n.location,
+            Nodes::Block(n) => n.location,
+            Nodes::File(n)  => n.location,
+        }
+    }
     /// Function that returns the statically known type
     /// of any syntactic node generated.
     pub fn yield_type(&self) -> StaticTypes {
@@ -399,7 +430,6 @@ impl Nodes {
                 call.return_type.to_owned()
             },
             Nodes::Block(_)
-            | Nodes::Line(_)
             | Nodes::File(_) => StaticTypes::TUnknown,
             Nodes::Empty(_) => StaticTypes::TNil,
         }
@@ -441,7 +471,6 @@ impl Nodes {
     pub fn   sym(&self) -> Option<&SymNode>   { unwrap_enum!(self, Nodes::Sym)   }
     pub fn  call(&self) -> Option<&CallNode>  { unwrap_enum!(self, Nodes::Call)  }
     pub fn block(&self) -> Option<&BlockNode> { unwrap_enum!(self, Nodes::Block) }
-    pub fn  line(&self) -> Option<&LineNode>  { unwrap_enum!(self, Nodes::Line)  }
     pub fn  file(&self) -> Option<&FileNode>  { unwrap_enum!(self, Nodes::File)  }
     pub fn empty(&self) -> Option<&EmptyNode> { unwrap_enum!(self, Nodes::Empty) }
 
@@ -465,35 +494,39 @@ impl Nodes {
 }
 
 impl IdentNode {
-    pub fn new(value : &str) -> Nodes {
+    pub fn new(value : &str, location : Loc) -> Nodes {
         Nodes::Ident(IdentNode {
             value: value.to_string(),
-            static_type: StaticTypes::TUnknown
+            static_type: StaticTypes::TUnknown,
+            location
         })
     }
 }
 
 impl NumNode {
-    pub fn new<Num : ToNumeric>(number : Num) -> Nodes {
+    pub fn new<Num : ToNumeric>(number : Num, location : Loc) -> Nodes {
         let value = number.to_numeric();
-        Nodes::Num(NumNode { value })
+        Nodes::Num(NumNode { value, location })
     }
 }
 
 impl StrNode {
-    pub fn new(value : &str) -> Nodes { Nodes::Str(StrNode { value: value.to_string() }) }
+    pub fn new(value : &str, location : Loc) -> Nodes
+        { Nodes::Str(StrNode { value: value.to_string(), location }) }
 }
 
 impl SymNode {
-    pub fn new(value : &str) -> Nodes { Nodes::Sym(SymNode { value: value[1..].to_string() }) }
+    pub fn new(value : &str, location : Loc) -> Nodes
+        { Nodes::Sym(SymNode { value: value[1..].to_string(), location }) }
 }
 
 impl CallNode {
-    pub fn new(callee : Nodes, operands : Vec<Nodes>) -> Nodes {
+    pub fn new(callee : Nodes, operands : Vec<Nodes>, location : Loc) -> Nodes {
         Nodes::Call(CallNode {
             callee: Box::new(callee),
             operands: operands,
-            return_type: StaticTypes::TUnknown
+            return_type: StaticTypes::TUnknown,
+            location
         })
     }
 
@@ -527,16 +560,13 @@ impl CallNode {
     }
 }
 
-impl LineNode {
-    pub fn new(line : usize) -> Nodes { Nodes::Line(LineNode { line }) }
-}
-
 impl FileNode {
-    pub fn new(filename : String) -> Nodes { Nodes::File(FileNode { filename }) }
+    pub fn new(filename : String, location : Loc) -> Nodes
+        { Nodes::File(FileNode { filename, location }) }
 }
 
 impl EmptyNode {
-    pub fn new() -> Nodes { Nodes::Empty(EmptyNode { }) }
+    pub fn new(location : Loc) -> Nodes { Nodes::Empty(EmptyNode { location }) }
 }
 
 /// Root branch of the AST.
