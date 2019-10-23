@@ -14,12 +14,19 @@ pub mod syntax;
 /// instructions for the Brokkr VM, and marshals the instructions.
 pub mod compiler;
 
-pub fn parse(filename : &str) {
-    let root = syntax::parse_file(filename);
-    let mut code_block = compiler::block::LocalBlock::new("<main>", filename);
-
-
-    code_block.generate(&root.branches);
-    println!("Code Blocks:\n{}", code_block)
+pub fn parse(filename : &str) -> syntax::ast::Root {
+    syntax::parse_file(filename)
 }
 
+pub fn compile<'a>(root : &'a syntax::ast::Root) -> compiler::block::LocalBlock<'a> {
+    let mut code_block = compiler::block::LocalBlock::new("<main>", &root.filename);
+
+    code_block.generate(&root.branches);
+    println!("Code Blocks:\n{}", code_block);
+    code_block
+}
+
+pub fn binary_gen(block : &compiler::block::LocalBlock) -> String {
+    compiler::marshal::make_binary(block);
+    block.name.to_owned()
+}

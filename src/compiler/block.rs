@@ -12,6 +12,7 @@ use super::instructions;
 
 use element::{Element, Symbol};
 use instructions::{Instr, Operators};
+use num_traits::cast::FromPrimitive;
 
 use super::internal_functions;
 
@@ -35,17 +36,20 @@ struct IdentTypePair<'a>(String, &'a Nodes);
 #[derive(Clone)]
 pub struct LocalBlock<'a> {
     pub name : String,
-    filename : String,
-    constants : Vec<Element<'a>>,
-    instructions : Vec<Instr>,
-    globals : Vec<String>,
+    pub filename : String,
+    pub constants : Vec<Element<'a>>,
+    pub instructions : Vec<Instr>,
+    pub globals : Vec<String>,
     pub operand_type : ast::StaticTypes,
     pub return_type  : ast::StaticTypes,
 
     // Used only for compilation:
     locals_map : HashMap<String, u16>,
     types_to_check : VecDeque<IdentTypePair<'a>>,
-    current_line : usize,
+    current_line  : usize,
+    current_depth : usize,
+    stack_depth   : usize,
+    last_instruction : Instr
 }
 
 impl<'a> PartialEq for LocalBlock<'a> {
@@ -68,7 +72,10 @@ impl<'a> LocalBlock<'a> {
 
             locals_map: HashMap::new(),
             types_to_check: VecDeque::new(),
-            current_line: 0,
+            current_line:  0,
+            stack_depth:   0,
+            current_depth: 0,
+            last_instruction: Instr::Operator(0)
         }
     }
 
@@ -78,12 +85,30 @@ impl<'a> LocalBlock<'a> {
         self.push_operand(index);
     }
 
+    fn change_stack_depth(&mut self, i : isize) {
+        self.current_depth = (
+            (self.current_depth as isize) + i
+        ) as usize;
+        if self.current_depth > self.stack_depth {
+            self.stack_depth = self.current_depth;
+        }
+    }
+
     fn push_operator(&mut self, o : Operators) {
-        self.instructions.push(Instr::Operator(o as u8));
+        let instr = Instr::Operator(o as u8);
+        if !o.takes_operand() {
+            self.change_stack_depth(instr.depth_delta(None));
+        }
+        self.last_instruction = instr;
+        self.instructions.push(instr);
     }
 
     fn push_operand(&mut self, i : u16) {
-        self.instructions.push(Instr::Operand(i));
+        let operand = Instr::Operand(i);
+        self.instructions.push(operand);
+        self.change_stack_depth(
+            self.last_instruction.depth_delta(
+                Some(operand)));
     }
 
     fn insert_local(&mut self, s : String) -> u16 {
@@ -124,16 +149,17 @@ impl<'a> LocalBlock<'a> {
         let base_node = arguments.remove(0);
 
         if let Nodes::Ident(ident) = base_node {
-            let name = format!("{}__{}", ident.value.to_owned(), arguments.len() - 1);
+            let name = format!("__{}_final", ident.value.to_owned());
 
             let mut last_block = LocalBlock::new(&name, &self.filename);
             // TODO: Be more careful here, not always an ident.
             //  NEED TO DEAL WITH PATTERN MATCHING.
             last_block.insert_local(arguments.last().unwrap().ident().unwrap().value.to_owned());
             last_block.emit(right);
+            last_block.yield_last();
 
             for i in (0..(arguments.len() - 1)).rev() {
-                let name = format!("{}__{}", ident.value, i);
+                let name = format!("__{}_{}", ident.value, i);
                 let mut super_block = LocalBlock::new(
                     &name,
                     &self.filename);
@@ -144,6 +170,7 @@ impl<'a> LocalBlock<'a> {
                 super_block.push_const_instr(Element::ECode(last_block));
                 super_block.push_const_instr(Element::ESymbol(Symbol::new(&block_name)));
                 super_block.push_operator(Operators::MAKE_FUNC);
+                super_block.yield_last();
                 last_block = super_block;
             }
 
@@ -168,19 +195,21 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn emit(&mut self, node : &'a Nodes) {
-        match node {
-            Nodes::Line(line_node) => {
-                let len = self.instructions.len();
-                if len > 1 {
-                    if self.instructions[len - 2] == Instr::Operator(Operators::SET_LINE as u8) {
-                        self.instructions.pop();
-                        self.instructions.pop();
-                    }
+        let current_line = node.location().line as usize;
+        if self.current_line != current_line {
+            let len = self.instructions.len();
+            if len > 1 {
+                if self.instructions[len - 2] == Instr::Operator(Operators::SET_LINE as u8) {
+                    self.instructions.pop();
+                    self.instructions.pop();
                 }
-                self.current_line = line_node.line;
-                self.push_operator(Operators::SET_LINE);
-                self.push_operand(self.current_line as u16);
             }
+            self.current_line = current_line;
+            self.push_operator(Operators::SET_LINE);
+            self.push_operand(self.current_line as u16);
+        }
+
+        match node {
             Nodes::Ident(ident_node) => {
                 let s = &ident_node.value;
                 if !self.locals_map.contains_key(s) {
@@ -203,6 +232,17 @@ impl<'a> LocalBlock<'a> {
                 self.push_const_instr(Element::ESymbol(Symbol::new(&sym_node.value)));
             },
             Nodes::Call(call_node) => {
+                if let Nodes::Ident(ident_node) = &*call_node.callee {
+                    let mut do_return = true;
+                    match ident_node.value.as_str() {
+                        "__raw_print" => {
+                            self.emit(&call_node.operands[0]);
+                            self.push_operator(Operators::RAW_PRINT);
+                        }
+                        _ => do_return = false
+                    };
+                    if do_return { return; }
+                }
                 if call_node.is_binary() {
                     let ident = call_node.callee.call().unwrap().callee.ident().unwrap();
                     let args = vec![
@@ -267,11 +307,12 @@ impl<'a> LocalBlock<'a> {
                     // Check for fast internal binary operations such as +, -, *, /, etc.
                     let maybe_op = internal_functions::get_internal_op(&ident.value, Some(&args));
                     if let Some(op) = maybe_op {
+                    if let Instr::Operator(operator) = op {
                         self.emit(args[1]);
                         self.emit(args[0]);
-                        self.instructions.push(op);
+                        self.push_operator(Operators::from_u8(operator).unwrap());
                         return;
-                    }
+                    }}
                 }
                 // TODO: Optimise to implicitly ignore currying and use CALL_N instead.
                 //  Also, check that we are indeed calling a function, and not anything else
@@ -284,10 +325,15 @@ impl<'a> LocalBlock<'a> {
         };
     }
 
+    fn yield_last(&mut self) {
+        self.push_operator(Operators::YIELD);
+    }
+
     pub fn generate(&mut self, nodes : &'a Vec<Nodes>) {
         for node in nodes {
             self.emit(node);
         }
+        self.yield_last();
     }
 }
 
@@ -298,20 +344,27 @@ impl<'a> fmt::Display for LocalBlock<'a> {
                 write!(f, "{}", local_block)?;
             }
         }
-        write!(f, "\n{}:\n", self.name)?;
-        write!(f, "  | ===Constants===============\n")?;
+        write!(f, "\n{}:", self.name)?;
+        write!(f,"
+  |[meta]:
+  |  stack-depth: {}
+  |    file-name: {}\n",
+            self.stack_depth,
+            self.filename)?;
+
+        write!(f, "  |====Constants===============\n")?;
         for (i, c) in self.constants.iter().enumerate() {
-            write!(f, "  | {: >3} |  {} |\n", i, c)?;
+            write!(f, "  | {: >3} |  {}\n", i, c)?;
         }
-        write!(f, "  | ===Locals==================\n")?;
+        write!(f, "  |====Locals==================\n")?;
         for key in self.locals_map.keys() {
             write!(f, "  | {: >3} |  {}\n", self.locals_map[key], key)?;
         }
-        write!(f, "  | ===Globals=================\n")?;
+        write!(f, "  |====Globals=================\n")?;
         for (i, c) in self.globals.iter().enumerate() {
             write!(f, "  | {: >3} |  {}\n", i, c)?;
         }
-        write!(f, "  | ===Bytecodes===============\n")?;
+        write!(f, "  |====Bytecodes===============\n")?;
         for inst in &self.instructions {
             if let Instr::Operand(_) = inst {
                 write!(f, "{}", inst)?;

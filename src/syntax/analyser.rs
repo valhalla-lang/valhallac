@@ -22,10 +22,12 @@ fn const_fold(node : &Nodes) -> Nodes {
                 callee: Box::new(Nodes::Call(ast::CallNode {
                     callee: Box::new(const_fold(&*call.callee.call().unwrap().callee)),
                     operands: vec![left.clone()],
-                    return_type: call.callee.yield_type()
+                    return_type: call.callee.yield_type(),
+                    location: call.callee.call().unwrap().location
                 })),
                 operands: vec![right.clone()],
-                return_type: call.return_type.clone()
+                return_type: call.return_type.clone(),
+                location: call.location
             });
 
             let is_num_left  =  left.num().is_some();
@@ -48,7 +50,7 @@ fn const_fold(node : &Nodes) -> Nodes {
                         return default;
                     }
                 };
-                return Nodes::Num(ast::NumNode { value });
+                return Nodes::Num(ast::NumNode { value, location: call.location });
             } else {
                 return default;
             }
@@ -56,7 +58,8 @@ fn const_fold(node : &Nodes) -> Nodes {
         return Nodes::Call(ast::CallNode {
             callee: Box::new(const_fold(&*call.callee)),
             operands: vec![const_fold(&call.operands[0])],
-            return_type: call.return_type.clone()
+            return_type: call.return_type.clone(),
+            location: call.location
         });
     }
     return node.to_owned();
@@ -73,9 +76,11 @@ fn create_cast(node : &Nodes, cast : &ast::StaticTypes) -> Nodes {
 
     let mut cast_node = ast::CallNode::new(
         ast::CallNode::new(
-            ast::IdentNode::new("cast"),
-            vec![node.clone()]),
-        vec![ast::SymNode::new(to_type)]);
+            ast::IdentNode::new("cast", node.location()),
+            vec![node.clone()],
+            node.location()),
+        vec![ast::SymNode::new(to_type, node.location())],
+        node.location());
     if let Nodes::Call(ref mut call) = cast_node {
         call.set_return_type(cast.clone())
     }
@@ -117,13 +122,16 @@ fn balance_types(node : &Nodes) -> Nodes {
                         if casting_right {
                             new_call = ast::CallNode::new(
                                 *call.callee.clone(),
-                                vec![create_cast(&right, &cast_to)]);
+                                vec![create_cast(&right, &cast_to)],
+                                call.callee.location());
                         } else {
                             new_call = ast::CallNode::new(
                                 ast::CallNode::new(
                                     *call.callee.call().unwrap().callee.clone(),
-                                    vec![create_cast(&left, &cast_to)]),
-                                vec![right]);
+                                    vec![create_cast(&left, &cast_to)],
+                                    call.callee.location()),
+                                vec![right],
+                                call.location);
                         }
                         if let Nodes::Call(ref mut c) = new_call {
                             c.set_return_type(cast_to);
@@ -142,7 +150,8 @@ fn balance_types(node : &Nodes) -> Nodes {
                     if cast_strength(&left_yield) > cast_strength(&right_yield) {
                         let mut new_call = ast::CallNode::new(
                             *call.callee.clone(),
-                            vec![create_cast(&right, &left_yield)]);
+                            vec![create_cast(&right, &left_yield)],
+                            call.callee.location());
                         if let Nodes::Call(ref mut c) = new_call {
                             c.set_return_type(left_yield);
                         }
@@ -153,7 +162,8 @@ fn balance_types(node : &Nodes) -> Nodes {
         }
         let mut non_bi = ast::CallNode::new(
             balance_types(&*call.callee),
-            vec![balance_types(&call.operands[0])]);
+            vec![balance_types(&call.operands[0])],
+            call.callee.location());
         if let Nodes::Call(ref mut c) = non_bi {
             c.set_return_type(call.return_type.clone());
         }
@@ -180,8 +190,8 @@ impl TypeChecker {
 
     pub fn type_branch(&mut self, node : &Nodes) -> Nodes {
         let mut clone = node.to_owned();
+        self.source_line = clone.location().line as usize;
         match clone {
-            Nodes::Line(l) => self.source_line = l.line,
             Nodes::File(f) => self.source_file = f.filename.to_owned(),
             Nodes::Ident(ref mut i) => {
                 if let Some(annotation) = self.ident_map.get(&i.value) {
