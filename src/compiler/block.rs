@@ -36,10 +36,10 @@ struct IdentTypePair<'a>(String, &'a Nodes);
 #[derive(Clone)]
 pub struct LocalBlock<'a> {
     pub name : String,
-    filename : String,
-    constants : Vec<Element<'a>>,
-    instructions : Vec<Instr>,
-    globals : Vec<String>,
+    pub filename : String,
+    pub constants : Vec<Element<'a>>,
+    pub instructions : Vec<Instr>,
+    pub globals : Vec<String>,
     pub operand_type : ast::StaticTypes,
     pub return_type  : ast::StaticTypes,
 

@@ -56,7 +56,7 @@ impl Instr {
 impl fmt::Display for Instr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match &self {
-            Instr::Operand(n) => format!("{: >4}\n", n),
+            Instr::Operand(n) => format!("{: >4} (0x{:04x})\n", n, n),
             Instr::Operator(n) => {
                 let op_str = &Operators::from_u8(*n).unwrap().to_string();
                 if op_str.ends_with("\n") {

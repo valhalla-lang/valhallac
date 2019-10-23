@@ -571,12 +571,13 @@ impl EmptyNode {
 
 /// Root branch of the AST.
 pub struct Root {
-    pub branches : Vec<Nodes>
+    pub branches : Vec<Nodes>,
+    pub filename : String
 }
 
 impl Root {
-    pub fn new() -> Self {
-        Root { branches: Vec::new() }
+    pub fn new(filename : &str) -> Self {
+        Root { branches: Vec::new(), filename: filename.to_owned() }
     }
 }
 

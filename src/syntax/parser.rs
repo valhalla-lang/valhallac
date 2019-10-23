@@ -33,7 +33,7 @@ struct ParseEnvironment<'a> {
 impl<'a> ParseEnvironment<'a> {
     pub fn new(stream : VecDeque<Token>, file : &'a str) -> Self {
         ParseEnvironment {
-            root: ast::Root::new(),
+            root: ast::Root::new(file),
             eof_token: stream.iter().last().unwrap().to_owned(),
             stream,
             optable: operators::PrecedenceTable::new(),
