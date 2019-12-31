@@ -2,6 +2,8 @@
 //! the generated AST to Brokkr-bytecode for the
 //! Valhalla set theoretic programming language.
 
+const VERSION : [u8; 3] = [0, 0, 1];
+
 /// Error messages.
 #[macro_use]
 pub mod err;

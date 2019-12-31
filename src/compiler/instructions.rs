@@ -74,7 +74,6 @@ impl fmt::Display for Instr {
 #[allow(non_camel_case_types)]
 #[derive(Primitive, Clone, Copy)]
 pub enum Operators {
-    HALT        = 0,   // TAKES 1 OPERAND(s)
     PUSH_CONST  = 1,   // TAKES 1 OPERAND(s)
     PUSH_LOCAL  = 2,   // TAKES 1 OPERAND(s)
     PUSH_SUPER  = 3,   // TAKES 1 OPERAND(s)
@@ -107,6 +106,8 @@ pub enum Operators {
     I_DIV       = 54,  // TAKES 0 OPERAND(s)
     R_DIV       = 55,  // TAKES 0 OPERAND(s)
     U_DIV       = 56,  // TAKES 0 OPERAND(s)
+
+    HALT        = 200, // TAKES 1 OPERAND(s)
 
     // Misc- / Meta-codes
     SET_LINE = 254,  // TAKES 1 OPERAND(s)

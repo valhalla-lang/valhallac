@@ -44,11 +44,11 @@ pub struct LocalBlock<'a> {
     pub return_type  : ast::StaticTypes,
 
     // Used only for compilation:
-    locals_map : HashMap<String, u16>,
+    pub locals_map : HashMap<String, u16>,
     types_to_check : VecDeque<IdentTypePair<'a>>,
     current_line  : usize,
     current_depth : usize,
-    stack_depth   : usize,
+    pub stack_depth   : usize,
     last_instruction : Instr
 }
 
