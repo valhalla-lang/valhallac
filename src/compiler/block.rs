@@ -136,8 +136,8 @@ impl<'a> LocalBlock<'a> {
             self.emit(type_node);
             self.push_operator(Operators::CHECK_TYPE);
         } else {  // Otherwise just pop, type was already checked statically so
-                  //  its of no use to include in the compiled program,
-                  //  as no dynamic checking is needed.
+                 //  its of no use to include in the compiled program,
+                //   as no dynamic checking is needed.
             self.types_to_check.pop_front();
         }
         self.push_operator(Operators::STORE_LOCAL);

@@ -88,10 +88,12 @@ impl<'a> ParseEnvironment<'a> {
                             ast::IdentNode::new(&token.string, loc)
                         },
                         _ => {
-                            // If the operator is prefix:
-                            //   e.g. -a  <=>  ((-) a)
+                            // If the operator is suffix:
+                            //   e.g. (a +)  <=>  ((+) a)
                             // Otherwise it's a partial application:
                             //   e.g. (* a)  <=>  ((flip (*)) a)
+                            // But, prefix operators don't get flipped:
+                            //   e.g. (- a)  <=> ((-) a)  <=>  -a
                             if prefix.is_none() {
                                 ast::CallNode::new(
                                     ast::CallNode::new(
@@ -196,13 +198,16 @@ impl<'a> ParseEnvironment<'a> {
         if self.stream[0].class == TokenType::RParen {
             return first_apply;
         }
-        let right = self.expr(op.precedence - (if op.is_right() { 1 } else { 0 }));
+        let right = self.expr(
+            op.precedence - (if op.is_right() { 1 } else { 0 }));
+
         ast::CallNode::new(first_apply, vec![right], self.location)
     }
 
     fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
         if maybe_t.is_none() {
-            issue!(err::Types::ParseError, self.file, self.stream.iter().last().unwrap(),
+            issue!(err::Types::ParseError, self.file,
+                self.stream.iter().last().unwrap(),
                 "Unexpected end of stream.");
         }
         let t = maybe_t.unwrap();
