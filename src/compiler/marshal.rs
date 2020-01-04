@@ -2,14 +2,14 @@
  * NOTES:
  * - No top level bytes should be `0x00`.
  *   This includes constant specifiers, operators (operands are OK),
- *   etc.  0x00 should be reserved as a terminator for strings and
- *   blocks.
+ *   etc.  0x00 should be reserved as a terminator for certain
+ *   strings and blocks.
  *
  * Compiled Bytecode Format:
  * ```
  *  | VERSION [u8; 3]
  *  | MARSHALLED CODE BLOCK:
- *  |  | filename [u8; x] (abs path, null terminated, utf8)
+ *  |  | source-filename [u8; x] (abs path, null terminated, utf8)
  *  |  | module-name [u8; x] (null terminated, utf8)
  *  |  | stack-depth [u8; 2]
  *  |  |
@@ -39,11 +39,11 @@ use instructions::{Instr, Operators};
 
 fn mk_bin_file(name : &str, bytes : Vec<u8>) -> File {
     let mut file = File::create(name).expect("Could not create binary.");
-    file.write(&bytes.as_ref()).expect("Could not write to file.");
+    file.write(&bytes).expect("Could not write to file.");
     file
 }
 
-fn constant_ident(element : &Element) -> u8 {
+fn constant_ident_prefix(element : &Element) -> u8 {
     return match element {
         Element::ENatural(_) => 0x01,
         Element::EInteger(_) => 0x02,
@@ -55,32 +55,42 @@ fn constant_ident(element : &Element) -> u8 {
 macro_rules! num_marshal_append {
     ($num:expr, $arr:expr) => {
         {
+            // Split to byte-vector.
             let mut split = $num.to_be_bytes().to_vec();
+
+            // Ignore leading zeros.
+            let mut i = 0u8;
+            for byte in &split {
+                if *byte != 0u8 { break; }
+                i += 1;
+            }
+            split = split[i as usize..].to_vec();
+
             $arr.push(split.len() as u8);
             $arr.append(&mut split);
         }
     };
 }
 /*
- * Number marshaling:
+ * Number marshalling:
  * ```
  * # [...] = one byte.
- * [NUM TYPE] [BYTE LEN] [BYTE 1] [BYTE 2] ... [BYTE n - 1] [BYTE n]
+ * [NUM TYPE PREFIX] [NUM OF BYTES (n)] [BYTE 1] [BYTE 2] ... [BYTE n]
  * ```
  */
 fn marshal_element(element : &Element) -> Vec<u8> {
     let mut bytes : Vec<u8> = vec![];
     match element {
         Element::ENatural(n) => {
-            bytes.push(constant_ident(element));
+            bytes.push(constant_ident_prefix(element));
             num_marshal_append!(n, bytes);
         },
         Element::EInteger(i) => {
-            bytes.push(constant_ident(element));
+            bytes.push(constant_ident_prefix(element));
             num_marshal_append!(i, bytes);
         },
         Element::EReal(r) => {
-            bytes.push(constant_ident(element));
+            bytes.push(constant_ident_prefix(element));
             num_marshal_append!(r, bytes);
         },
         _ => ()
@@ -118,15 +128,12 @@ fn marshal_locals(locals : &HashMap<String, u16>) -> Vec<u8> {
     strings.into_iter().flatten().collect()
 }
 
-pub fn make_binary(blk : &block::LocalBlock) -> String {
+pub fn make_binary(blk : &block::LocalBlock, out_name : String) -> Result<(), &'static str> {
     let instrs = marshal_instructions(&blk.instructions);
     let consts = marshal_consts(&blk.constants);
     let locals = marshal_locals(&blk.locals_map);
+    let filename =  blk.filename.to_owned();
 
-    let mut filename =  blk.filename.to_owned();
-    if filename.ends_with(".vh") {
-        filename = filename[0..filename.len() - 3].to_owned();
-    }
     let mut bytes : Vec<u8> = vec![];
     // Version number [u8; 3].
     bytes.extend(&crate::VERSION);
@@ -150,7 +157,17 @@ pub fn make_binary(blk : &block::LocalBlock) -> String {
     bytes.push(0x13);
     bytes.extend(instrs);
     bytes.push(0x00);
-    let file = mk_bin_file(&filename, bytes);
 
-    filename
+    print!("Bytes:\n  ");
+    let mut i = 1;
+    for byte in &bytes {
+        print!("{:02x} ", byte);
+       if i % 16 == 0 { print!("\n  ") };
+        i += 1;
+    }
+    println!();
+
+    let _file = mk_bin_file(&out_name, bytes);
+
+    Ok(())
 }

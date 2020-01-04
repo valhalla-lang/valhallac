@@ -13,7 +13,9 @@ pub fn main() -> Result<(), i32> {
     for file in files {
         let root = valhallac::parse(&file);
         let block = valhallac::compile(&root);
-        valhallac::binary_gen(&block);
+
+        let out = file[..file.len() - 3].to_owned();
+        valhallac::binary_gen(&block, out);
     }
     Ok(())
 }

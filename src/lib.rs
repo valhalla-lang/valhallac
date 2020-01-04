@@ -28,7 +28,7 @@ pub fn compile<'a>(root : &'a syntax::ast::Root) -> compiler::block::LocalBlock<
     code_block
 }
 
-pub fn binary_gen(block : &compiler::block::LocalBlock) -> String {
-    compiler::marshal::make_binary(block);
+pub fn binary_gen(block : &compiler::block::LocalBlock, out_name : String) -> String {
+    compiler::marshal::make_binary(block, out_name);
     block.name.to_owned()
 }

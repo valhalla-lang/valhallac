@@ -1,5 +1,5 @@
 a : Nat
-a = 3
+a = 0xabc
 
 __raw_print (a + 2.5)
 
