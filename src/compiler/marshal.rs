@@ -48,6 +48,7 @@ fn constant_ident_prefix(element : &Element) -> u8 {
         Element::ENatural(_) => 0x01,
         Element::EInteger(_) => 0x02,
         Element::EReal(_)    => 0x03,
+        Element::EString(_)  => 0x04,
         _ => panic!("No byte-ident for this constant type")
     } as u8;
 }
@@ -55,13 +56,13 @@ fn constant_ident_prefix(element : &Element) -> u8 {
 macro_rules! num_marshal_append {
     ($num:expr, $arr:expr) => {
         {
-            // Split to byte-vector.
+            // Split to big-endian byte-vector.
             let mut split = $num.to_be_bytes().to_vec();
 
             // Ignore leading zeros.
             let mut i = 0u8;
             for byte in &split {
-                if *byte != 0u8 { break; }
+                if *byte != 0 { break; }
                 i += 1;
             }
             split = split[i as usize..].to_vec();
@@ -72,11 +73,16 @@ macro_rules! num_marshal_append {
     };
 }
 /*
- * Number marshalling:
- * ```
- * # [...] = one byte.
- * [NUM TYPE PREFIX] [NUM OF BYTES (n)] [BYTE 1] [BYTE 2] ... [BYTE n]
- * ```
+ * Constant marshalling:
+ *
+ * [...] = one byte.
+ * For numbers:
+ *  `[TYPE PREFIX] [NUM OF BYTES (n)] [BYTE 1] [BYTE 2] ... [BYTE n]`
+ *                 \_______________________________________________/
+ *                                             |  These are the same concept.
+ * For strings:    /￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣\
+ *  `[TYPE PREFIX] [LENGTH OF SIZE BYTES (n)] [SIZE BYTE 1]...[SIZE BYTE n] [CHAR 1]...[CHAR m]`
+ *                                            \_____size of string (m)____/
  */
 fn marshal_element(element : &Element) -> Vec<u8> {
     let mut bytes : Vec<u8> = vec![];
@@ -93,7 +99,14 @@ fn marshal_element(element : &Element) -> Vec<u8> {
             bytes.push(constant_ident_prefix(element));
             num_marshal_append!(r, bytes);
         },
-        _ => ()
+        Element::EString(s) => {
+            let s_bytes = s.as_bytes().to_vec();
+            let s_bytes_len = s.len();
+            bytes.push(constant_ident_prefix(element));
+            num_marshal_append!(s_bytes_len, bytes);
+            bytes.extend(s_bytes);
+        }
+        _ => panic!("I do not know how to marshal this type.")
     };
     bytes
 }

@@ -49,7 +49,9 @@ pub struct LocalBlock<'a> {
     current_line  : usize,
     current_depth : usize,
     pub stack_depth   : usize,
-    last_instruction : Instr
+    last_instruction : Instr,
+    last_const_push_index : u16,
+    last_depth_delta : isize,
 }
 
 impl<'a> PartialEq for LocalBlock<'a> {
@@ -75,17 +77,26 @@ impl<'a> LocalBlock<'a> {
             current_line:  0,
             stack_depth:   0,
             current_depth: 0,
-            last_instruction: Instr::Operator(0)
+            last_instruction: Instr::Operator(0),
+            last_const_push_index: 0xffff,
+            last_depth_delta: 0,
         }
     }
 
     fn push_const_instr(&mut self, e : Element<'a>) {
         let index = append_unique(&mut self.constants, e) as u16;
-        self.push_operator(Operators::PUSH_CONST);
-        self.push_operand(index);
+
+        // Don't push constant if:
+        //    (already on stack) and (stack depth has stayed the same)
+        if !(index == self.last_const_push_index && self.last_depth_delta == 0) {
+            self.push_operator(Operators::PUSH_CONST);
+            self.push_operand(index);
+            self.last_const_push_index = index;
+        }
     }
 
     fn change_stack_depth(&mut self, i : isize) {
+        self.last_depth_delta = i;
         self.current_depth = (
             (self.current_depth as isize) + i
         ) as usize;

@@ -1,5 +1,5 @@
 a : Nat
-a = 0xabc
+a = 3  -- only one byte
 
 __raw_print (a + 2.5)
-
+__raw_print "hello"
