@@ -3,8 +3,12 @@
 </p>
 
 # Valhalla Programming Language
+This is the parser and compiler for Valhalla, which excludes the virtual
+machine that the compiled bytecode runs on, which is,
+[Brokkr VM](https://github.com/Demonstrandum/brokkr).
 
 ## IN (HEAVY) DEVELOPMENT
+
 
 What's been done so far on the front-end:
 
@@ -65,7 +69,8 @@ verify proofs and such in and around set theory.
 
 The language is a general purpose, but instead of being totally object-oriented,
 or functional, etc., it's just set theory based.  From what I've
-gathered, it's not a very popular paradigm.
+gathered, it's not a very popular paradigm...  Likely for good reason, but hey,
+it might be interesting.
 
 ### Dependencies
 Yikes...
