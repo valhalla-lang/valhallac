@@ -28,7 +28,6 @@ pub fn compile<'a>(root : &'a syntax::ast::Root) -> compiler::block::LocalBlock<
     code_block
 }
 
-pub fn binary_gen(block : &compiler::block::LocalBlock, out_name : String) -> String {
-    compiler::marshal::make_binary(block, out_name);
-    block.name.to_owned()
+pub fn binary_blob(block : &compiler::block::LocalBlock) -> Vec<u8> {
+    compiler::marshal::generate_binary(block)
 }

@@ -21,28 +21,22 @@
  *  |  | (block end: 0x00)
  *  |  | INSTRUCTION CODES [u8; x] (block begin: 0x13)
  *  |  |     (contains stream of operators and operands)
- *  |  | (block end: 0x00)
+ *  |  | (block end: 0x00 (EOI))
  * ```
 !*/
-use std::fs::File;
-use std::io::{Write, Error};
 use std::collections::HashMap;
 
 use super::element;
 use super::instructions;
 use super::block;
 
-use element::{Element, Symbol};
-use instructions::{Instr, Operators};
+use element::Element;
+use instructions::Instr;
 
 // This ain't gonna be fun.
 
-fn mk_bin_file(name : &str, bytes : Vec<u8>) -> File {
-    let mut file = File::create(name).expect("Could not create binary.");
-    file.write(&bytes).expect("Could not write to file.");
-    file
-}
 
+/// Gives each type a specifier prefix to identify them.
 fn constant_ident_prefix(element : &Element) -> u8 {
     return match element {
         Element::ENatural(_) => 0x01,
@@ -75,14 +69,16 @@ macro_rules! num_marshal_append {
 /*
  * Constant marshalling:
  *
- * [...] = one byte.
+ * [...] = one (1) byte.
+ * [TSP] = Type Specifier Prefix
+ *
  * For numbers:
- *  `[TYPE PREFIX] [NUM OF BYTES (n)] [BYTE 1] [BYTE 2] ... [BYTE n]`
- *                 \_______________________________________________/
- *                                             |  These are the same concept.
- * For strings:    /￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣\
- *  `[TYPE PREFIX] [LENGTH OF SIZE BYTES (n)] [SIZE BYTE 1]...[SIZE BYTE n] [CHAR 1]...[CHAR m]`
- *                                            \_____size of string (m)____/
+ *  `[TPS] [NUM OF BYTES (n)] [BYTE 1] [BYTE 2] ... [BYTE n]`
+ *         \_______________________________________________/
+ * For strings:                       |  These are the same concept.
+ *         /￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣\
+ *  `[TPS] [NUM OF SIZE BYTES (n)] [SIZE BYTE 1]...[SIZE BYTE n] [CHAR 1]...[CHAR m]`
+ *                                 \_____size of string (m)____/
  */
 fn marshal_element(element : &Element) -> Vec<u8> {
     let mut bytes : Vec<u8> = vec![];
@@ -131,8 +127,7 @@ fn marshal_consts(consts : &Vec<Element>) -> Vec<u8> {
 }
 
 fn marshal_locals(locals : &HashMap<String, u16>) -> Vec<u8> {
-    let mut strings : Vec<Vec<u8>> = Vec::with_capacity(locals.len());
-    strings = vec![vec![0x00]; locals.len()];
+    let mut strings : Vec<Vec<u8>> = vec![vec![0x00]; locals.len()];
     for key in locals.keys() {
         let mut string = key.as_bytes().to_vec();
         string.push(0x00);
@@ -141,17 +136,15 @@ fn marshal_locals(locals : &HashMap<String, u16>) -> Vec<u8> {
     strings.into_iter().flatten().collect()
 }
 
-pub fn make_binary(blk : &block::LocalBlock, out_name : String) -> Result<(), &'static str> {
+pub fn marshal_block(blk : &block::LocalBlock) -> Vec<u8> {
     let instrs = marshal_instructions(&blk.instructions);
     let consts = marshal_consts(&blk.constants);
     let locals = marshal_locals(&blk.locals_map);
-    let filename =  blk.filename.to_owned();
+    let source_name =  blk.filename.to_owned();
 
     let mut bytes : Vec<u8> = vec![];
-    // Version number [u8; 3].
-    bytes.extend(&crate::VERSION);
     // Null-terminated file name.
-    bytes.extend(filename.as_bytes());
+    bytes.extend(source_name.as_bytes());
     bytes.push(0x00);
     // Null-terminated module name.
     bytes.extend(blk.name.as_bytes());
@@ -171,6 +164,13 @@ pub fn make_binary(blk : &block::LocalBlock, out_name : String) -> Result<(), &'
     bytes.extend(instrs);
     bytes.push(0x00);
 
+    bytes
+}
+
+pub fn generate_binary(blk : &block::LocalBlock) -> Vec<u8> {
+    let mut bytes = crate::VERSION.to_vec();
+    bytes.extend(marshal_block(blk));
+
     print!("Bytes:\n  ");
     let mut i = 1;
     for byte in &bytes {
@@ -180,7 +180,5 @@ pub fn make_binary(blk : &block::LocalBlock, out_name : String) -> Result<(), &'
     }
     println!();
 
-    let _file = mk_bin_file(&out_name, bytes);
-
-    Ok(())
+    bytes
 }

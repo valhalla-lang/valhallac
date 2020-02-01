@@ -74,6 +74,8 @@ impl fmt::Display for Instr {
 #[allow(non_camel_case_types)]
 #[derive(Primitive, Clone, Copy)]
 pub enum Operators {
+    EOI         = 0,   // TAKES 0 OPERAND(s) (Not a proper operator)
+
     PUSH_CONST  = 1,   // TAKES 1 OPERAND(s)
     PUSH_LOCAL  = 2,   // TAKES 1 OPERAND(s)
     PUSH_SUPER  = 3,   // TAKES 1 OPERAND(s)
@@ -133,6 +135,8 @@ impl Operators {
 impl fmt::Display for Operators {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match &self {
+            Operators::EOI         => "EOI",
+
             Operators::HALT        => "HALT",
             Operators::PUSH_CONST  => "PUSH_CONST",
             Operators::PUSH_LOCAL  => "PUSH_LOCAL",
