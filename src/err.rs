@@ -12,26 +12,27 @@ use unindent::unindent;
 #[allow(non_camel_case_types)]
 pub struct NO_TOKEN;
 
-pub enum Types {
+#[allow(clippy::pub_enum_variant_names)]
+pub enum ErrorType {
     LexError,
     ParseError,
     TypeError,
     CompError,
 }
 
-impl fmt::Display for Types {
+impl fmt::Display for ErrorType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match *self {
-            Types::LexError   => "Lexicographical Error",
-            Types::ParseError =>         "Grammar Error",
-            Types::TypeError  =>          "Typing Error",
-            Types::CompError  =>     "Compilation Error",
+            ErrorType::LexError   => "Lexicographical Error",
+            ErrorType::ParseError =>         "Grammar Error",
+            ErrorType::TypeError  =>          "Typing Error",
+            ErrorType::CompError  =>     "Compilation Error",
         };
         write!(f, "{}", printable)
     }
 }
 
-pub fn tissue(class : Types, filename : &str, token : &token::Token,  message : &str) {
+pub fn tissue(class : ErrorType, filename : &str, token : &token::Token,  message : &str) {
     let file = fs::File::open(filename).expect("Invalid filename for error message.");
     let line = BufReader::new(file).lines().nth((token.location.line - 1) as usize).unwrap().unwrap();
 
@@ -47,11 +48,11 @@ pub fn tissue(class : Types, filename : &str, token : &token::Token,  message : 
         offset=((token.location.col + token.location.span) as usize));
 }
 
-pub fn lissue(class : Types, filename : &str, line_n : usize,  message : &str) {
+pub fn lissue(class : ErrorType, filename : &str, line_n : usize,  message : &str) {
     let file = fs::File::open(filename).expect("Invalid filename for error message.");
     let line = BufReader::new(file).lines().nth((line_n - 1) as usize).unwrap().unwrap();
 
-    let formatted = unindent(message).split("\n").collect::<Vec<&str>>().join("\n  ");
+    let formatted = unindent(message).split('\n').collect::<Vec<&str>>().join("\n  ");
     eprintln!("{}{} {}", "issue".bold().red(), ":".white(), formatted.bold());
     eprint!("{}", "".clear());
     eprintln!(" ==> {class} in (`{file}`:{line}):\n{space}|\n{line_str}| {stuff}",
@@ -63,27 +64,31 @@ pub fn lissue(class : Types, filename : &str, line_n : usize,  message : &str) {
 
 #[macro_export]
 macro_rules! issue {
-    ($type:path, $file:expr, err::NO_TOKEN, $line:expr, $message:expr) => {
+    ($type:ident, $file:expr, err::NO_TOKEN, $line:expr, $message:expr) => {
         {
-            err::lissue($type, $file, $line, $message);
+            err::lissue(err::ErrorType::$type,
+                $file, $line, $message);
             std::process::exit(1)
         }
     };
-    ($type:path, $file:expr, err::NO_TOKEN, $line:expr, $message:expr, $($form:expr),*) => {
+    ($type:ident, $file:expr, err::NO_TOKEN, $line:expr,$message:expr, $($form:expr),*) => {
         {
-            err::lissue($type, $file, $line, &format!($message, $($form),*));
+            err::lissue(err::ErrorType::$type,
+                $file, $line, &format!($message, $($form),*));
             std::process::exit(1)
         }
     };
-    ($type:path, $file:expr, $token:expr, $message:expr) => {
+    ($type:ident, $file:expr, $token:expr, $message:expr) => {
         {
-            err::tissue($type, $file, $token, $message);
+            err::tissue(err::ErrorType::$type,
+                $file, $token, $message);
             std::process::exit(1)
         }
     };
-    ($type:path, $file:expr, $token:expr, $message:expr, $($form:expr),*) => {
+    ($type:ident, $file:expr, $token:expr, $message:expr, $($form:expr),*) => {
         {
-            err::tissue($type, $file, $token, &format!($message, $($form),*));
+            err::tissue(err::ErrorType::$type,
+                $file, $token, &format!($message, $($form),*));
             std::process::exit(1)
         }
     };

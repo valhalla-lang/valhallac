@@ -28,7 +28,7 @@ pub fn main() -> Result<(), i32> {
 
         // Write blob to file.
         let mut file = File::create(out).expect("Could not create binary.");
-        file.write(&bytes).expect("Could not write to binary.");
+        file.write_all(&bytes).expect("Could not write to binary.");
     }
     Ok(())
 }

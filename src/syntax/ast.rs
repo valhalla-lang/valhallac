@@ -116,7 +116,7 @@ fn parse_with_radix(neg : bool, s : &str, radix : u32) -> Numerics {
 pub trait ToNumeric { fn to_numeric(&self) -> Numerics; }
 impl ToNumeric for &str {
     fn to_numeric(&self) -> Numerics {
-        let mut test_str = self.clone().to_ascii_lowercase();
+        let mut test_str = <&str>::clone(self).to_ascii_lowercase();
 
         let is_neg = self.starts_with('-');
         if is_neg { test_str = test_str.get(1..).unwrap().to_string(); }
@@ -348,7 +348,12 @@ impl fmt::Display for Nodes {
             Nodes::Call(node)   => format!(
                 "%call{{\n  :yield {}\n  :callee ({})\n  :operands [|\n    {}\n  |]\n}}", yt, node.callee,
                 node.operands.iter().map(Nodes::to_string).collect::<Vec<String>>().join("\n    ")),
-            Nodes::Block(_)     => format!("%block{{ ... }}"),
+            Nodes::Block(node)  => format!("%block{{ {} }}",
+                node.statements
+                .iter()
+                .map(Nodes::to_string)
+                .collect::<Vec<String>>()
+                .join("\n")),
             Nodes::File(node)   => format!("%file{{ :filename {} }}", node.filename),
             Nodes::Empty(_)     => String::from("()"),
         };
@@ -524,7 +529,7 @@ impl CallNode {
     pub fn new(callee : Nodes, operands : Vec<Nodes>, location : Loc) -> Nodes {
         Nodes::Call(CallNode {
             callee: Box::new(callee),
-            operands: operands,
+            operands,
             return_type: StaticTypes::TUnknown,
             location
         })
@@ -536,7 +541,7 @@ impl CallNode {
 
     pub fn collect(&self) -> Vec<Nodes> {
         fn make_argument_vector(call_node : &Nodes, operands : VecDeque<Nodes>) -> VecDeque<Nodes> {
-            let mut pushable = operands.clone();
+            let mut pushable = operands;
 
             if let Nodes::Call(call) = call_node {
                 pushable.push_front(call.operands[0].clone());
@@ -585,27 +590,27 @@ const TAB : &str = "  ";
 
 pub fn pretty_print(node : &Nodes, depth : usize) -> String {
     let tab = TAB.repeat(depth);
-    let printable = match node {
-            Nodes::Call(n) => format!(
-                "{tab}%call{{\n{tab}{T}:yield {yt}\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operand [|{op}|]\n{tab}}}",
-                tab=tab, T=TAB,
-                yt=n.return_type,
-                calling=pretty_print(&*n.callee, depth + 2),
-                op=(if n.operands.is_empty() { String::from(" ") } else { format!(
-                    "\n{ops}\n{tab}{T}",
-                    ops=pretty_print(&n.operands[0], depth + 2),
-                    tab=tab, T=TAB) })
-            ),
-            Nodes::Block(_) => format!("%block{{ ... }}"),
-            _ => format!("{}{}", tab, node)
-    };
-    printable
+    match node {
+        Nodes::Call(n) => format!(
+            "{tab}%call{{\n{tab}{T}:yield {yt}\n{tab}{T}:callee (\n{calling}\n{tab}{T})\n{tab}{T}:operand [|{op}|]\n{tab}}}",
+            tab=tab, T=TAB,
+            yt=n.return_type,
+            calling=pretty_print(&*n.callee, depth + 2),
+            op=(if n.operands.is_empty() { String::from(" ") } else { format!(
+                "\n{ops}\n{tab}{T}",
+                ops=pretty_print(&n.operands[0], depth + 2),
+                tab=tab, T=TAB) })
+        ),
+        // TODO: Pretty Print Blocks.
+        Nodes::Block(_) => node.to_string(),
+        _ => format!("{}{}", tab, node)
+    }
 }
 
 
 impl fmt::Display for Root {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let str_mapped : Vec<String> = self.branches.iter().map(|n| pretty_print(n, 0)).collect();
-        write!(f, "[|\n  {}\n|]", str_mapped.join("\n").split("\n").collect::<Vec<&str>>().join("\n  "))
+        write!(f, "[|\n  {}\n|]", str_mapped.join("\n").split('\n').collect::<Vec<&str>>().join("\n  "))
     }
 }

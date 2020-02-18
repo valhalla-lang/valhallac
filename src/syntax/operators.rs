@@ -21,7 +21,7 @@ pub struct Operator<'a> {
 impl<'a> Operator<'a> {
     pub fn new(name : &'a str, precedence : i32, associativity : Side, arity : i32) -> Self {
         Operator {
-            name: name.clone(),
+            name,
             precedence,
             associativity,
             arity,
@@ -53,8 +53,38 @@ macro_rules! push_op {
 
 impl<'a> PrecedenceTable<'a> {
     pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn new_op(&mut self, name : &'a str, prec : i32, assoc : Side, arity : i32) -> Operator {
+        let op = Operator::new(name, prec, assoc, arity);
+        self.table.push(op);
+        op
+    }
+
+    pub fn new_fun(&mut self, name : &'a str, max_arity : i32) -> Operator {
+        self.new_op(name, 19, Side::Neither, max_arity)
+    }
+
+    pub fn lookup(&self, name : &str, arity : i32) -> Option<&Operator> {
+        self.table.iter().filter(|o| o.name == name && o.arity == arity).nth(0)
+    }
+
+    pub fn exists(&self, name : &str) -> bool {
+        self.table.iter().filter(|o| o.name == name).nth(0).is_some()
+    }
+
+    pub fn precedence(&self, name : &str) -> Option<i32> {
+        let maybe_op = self.lookup(name, 2);
+        if let Some(op) = maybe_op { return Some(op.precedence) }
+        return None;
+    }
+}
+
+impl<'a> Default for PrecedenceTable<'a> {
+    fn default() -> Self {
         let op = Operator::new;
-        let table = PrecedenceTable { table: vec![
+        PrecedenceTable { table: vec![
             op( "::",210, Side::Left,    2),
             op( "<>",200, Side::Right,   2),
             // Function calls have precedence 190, i.e. very high.
@@ -96,32 +126,6 @@ impl<'a> PrecedenceTable<'a> {
             op( "=>",  1, Side::Neither, 2),
             op(  "(",  0, Side::Neither, 1),
             op(  ")",  0, Side::Neither, 1),
-        ]};
-
-        table
-    }
-
-    pub fn new_op(&mut self, name : &'a str, prec : i32, assoc : Side, arity : i32) -> Operator {
-        let op = Operator::new(name, prec, assoc, arity);
-        self.table.push(op);
-        op
-    }
-
-    pub fn new_fun(&mut self, name : &'a str, max_arity : i32) -> Operator {
-        self.new_op(name, 19, Side::Neither, max_arity)
-    }
-
-    pub fn lookup(&self, name : &str, arity : i32) -> Option<&Operator> {
-        self.table.iter().filter(|o| o.name == name && o.arity == arity).nth(0)
-    }
-
-    pub fn exists(&self, name : &str) -> bool {
-        self.table.iter().filter(|o| o.name == name).nth(0).is_some()
-    }
-
-    pub fn precedence(&self, name : &str) -> Option<i32> {
-        let op = self.lookup(name, 2);
-        if op.is_some() { return Some(op.unwrap().precedence) }
-        return None;
+        ]}
     }
 }

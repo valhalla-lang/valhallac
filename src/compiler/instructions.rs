@@ -1,7 +1,7 @@
 use std::fmt;
 
 use enum_primitive_derive::Primitive;
-use num_traits::{FromPrimitive};
+use num_traits::FromPrimitive;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instr {
@@ -10,7 +10,7 @@ pub enum Instr {
 }
 
 impl Instr {
-    pub fn depth_delta(&self, maybe_operand : Option<Instr>) -> isize {
+    pub fn depth_delta(self, maybe_operand : Option<Instr>) -> isize {
         if let Instr::Operand(_) = self
         { panic!("An operand does not have an impact on stack depth."); }
 
@@ -29,25 +29,23 @@ impl Instr {
                     _ => panic!("This type of opcode doesn't take operands.")
                 };
             }}
-        } else {
-            if let Instr::Operator(code) = self {
-                match code {
-                    40..=56 => return -1,
-                    _ => ()
-                }
-                return match Operators::from_u8(code.to_owned()).unwrap() {
-                    Operators::POP    => -1,
-                    Operators::DUP    =>  1,
-                    Operators::SWAP   =>  0,
-                    Operators::CALL_1 => -1,
-                    Operators::CHECK_TYPE => -2,
-                    Operators::MAKE_FUNC  => -1,
-                    Operators::YIELD      => -1,
-                    Operators::RAW_PRINT  =>  0,
-                    Operators::NOP => 0,
-                    _ => panic!("This opcode must take an operand.")
-                };
+        } else if let Instr::Operator(code) = self {
+            match code {
+                40..=56 => return -1,
+                _ => ()
             }
+            return match Operators::from_u8(code.to_owned()).unwrap() {
+                Operators::POP    => -1,
+                Operators::DUP    =>  1,
+                Operators::SWAP   =>  0,
+                Operators::CALL_1 => -1,
+                Operators::CHECK_TYPE => -2,
+                Operators::MAKE_FUNC  => -1,
+                Operators::YIELD      => -1,
+                Operators::RAW_PRINT  =>  0,
+                Operators::NOP => 0,
+                _ => panic!("This opcode must take an operand.")
+            };
         }
         panic!("Uncovered opcode.")
     }
@@ -59,7 +57,7 @@ impl fmt::Display for Instr {
             Instr::Operand(n) => format!("{: >4} (0x{:04x})\n", n, n),
             Instr::Operator(n) => {
                 let op_str = &Operators::from_u8(*n).unwrap().to_string();
-                if op_str.ends_with("\n") {
+                if op_str.ends_with('\n') {
                     format!("(0x{:02x}):{}", n, op_str)
                 } else {
                     format!("(0x{:02x}):{: <16}", n, op_str)
@@ -117,16 +115,16 @@ pub enum Operators {
 }
 
 impl Operators {
-    pub fn takes_operand(&self) -> bool {
+    pub fn takes_operand(self) -> bool {
         match self {
-            Operators::HALT
-            | Operators::PUSH_CONST
-            | Operators::PUSH_LOCAL
-            | Operators::PUSH_SUPER
-            | Operators::STORE_LOCAL
-            | Operators::DUP_N
-            | Operators::CAST
-            | Operators::SET_LINE => true,
+            Self::HALT
+            | Self::PUSH_CONST
+            | Self::PUSH_LOCAL
+            | Self::PUSH_SUPER
+            | Self::STORE_LOCAL
+            | Self::DUP_N
+            | Self::CAST
+            | Self::SET_LINE => true,
             _ => false
         }
     }

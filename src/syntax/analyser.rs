@@ -1,9 +1,17 @@
+/*!
+ * Analyse the syntax tree, assign types, cast types, and
+ * perform a battery of optimisations.
+ */
 use std::collections::HashMap;
 
 use crate::err;
 
 use super::ast;
 use ast::Nodes;
+
+// This entire file, should be rewritten.
+// Or, just deleted, and replaced with a folder containing
+// a file for each function (also rewritten) (since they get very big).
 
 /// Constant folding.
 /// A static optimisation that relieves the runtime of having to perform
@@ -118,21 +126,20 @@ fn balance_types(node : &Nodes) -> Nodes {
                         let casting_right = cast_strength(&left_yield) >  cast_strength(&right_yield);
                         let cast_to = (if casting_right { &left } else { &right }).yield_type();
 
-                        let mut new_call;
-                        if casting_right {
-                            new_call = ast::CallNode::new(
+                        let mut new_call = if casting_right {
+                            ast::CallNode::new(
                                 *call.callee.clone(),
                                 vec![create_cast(&right, &cast_to)],
-                                call.callee.location());
+                                call.callee.location())
                         } else {
-                            new_call = ast::CallNode::new(
+                            ast::CallNode::new(
                                 ast::CallNode::new(
                                     *call.callee.call().unwrap().callee.clone(),
                                     vec![create_cast(&left, &cast_to)],
                                     call.callee.location()),
                                 vec![right],
-                                call.location);
-                        }
+                                call.location)
+                        };
                         if let Nodes::Call(ref mut c) = new_call {
                             c.set_return_type(cast_to);
                         }
@@ -145,19 +152,17 @@ fn balance_types(node : &Nodes) -> Nodes {
                         return cloned_node;
                     }
                 }
-            } else if bin_op.value == "=" {
-                if left_yield.is_number() {
-                    if cast_strength(&left_yield) > cast_strength(&right_yield) {
-                        let mut new_call = ast::CallNode::new(
-                            *call.callee.clone(),
-                            vec![create_cast(&right, &left_yield)],
-                            call.callee.location());
-                        if let Nodes::Call(ref mut c) = new_call {
-                            c.set_return_type(left_yield);
-                        }
-                        return new_call;
-                    }
+            } else if bin_op.value == "="
+            && left_yield.is_number()
+            && cast_strength(&left_yield) > cast_strength(&right_yield) {
+                let mut new_call = ast::CallNode::new(
+                    *call.callee.clone(),
+                    vec![create_cast(&right, &left_yield)],
+                    call.callee.location());
+                if let Nodes::Call(ref mut c) = new_call {
+                    c.set_return_type(left_yield);
                 }
+                return new_call;
             }
         }
         let mut non_bi = ast::CallNode::new(
@@ -192,7 +197,7 @@ impl TypeChecker {
         let mut clone = node.to_owned();
         self.source_line = clone.location().line as usize;
         match clone {
-            Nodes::File(f) => self.source_file = f.filename.to_owned(),
+            Nodes::File(f) => self.source_file = f.filename,
             Nodes::Ident(ref mut i) => {
                 if let Some(annotation) = self.ident_map.get(&i.value) {
                     if let ast::StaticTypes::TSet(class) = annotation.clone() {
@@ -225,7 +230,7 @@ impl TypeChecker {
                                     return clone;
                                 } else {
                                     // Error: We need the left to be an ident.
-                                    issue!(err::Types::ParseError,
+                                    issue!(ParseError,
                                         self.source_file.as_str(),
                                         err::NO_TOKEN, self.source_line,
                                         "The left side of the member-of operator (`:`), must be an identifier.
@@ -256,7 +261,7 @@ impl TypeChecker {
 
                                         let base_node = operands.remove(0);
                                         if base_node.ident().is_none() {
-                                            issue!(err::Types::ParseError,
+                                            issue!(ParseError,
                                                 &self.source_file, err::NO_TOKEN, self.source_line,
                                                 "Function definitions must have the defining function's base caller
                                                 be an identifier! You're trying to define a function that has
@@ -267,7 +272,7 @@ impl TypeChecker {
                                         if maybe_type.is_none() {
                                             println!("{}", base_node);
                                             println!("{:?}", self.ident_map);
-                                            issue!(err::Types::TypeError,
+                                            issue!(TypeError,
                                                 self.source_file.as_str(),
                                                 err::NO_TOKEN, self.source_line,
                                                 "Cannot find type annotation for the
@@ -321,9 +326,9 @@ impl TypeChecker {
 
                 if let ast::StaticTypes::TFunction(_, o) = call.callee.yield_type() {
                     if let ast::StaticTypes::TSet(t) = *o {
-                        call.return_type = *t.clone();
+                        call.return_type = *t;
                     } else {
-                        call.return_type = *o.clone();
+                        call.return_type = *o;
                     }
                 }
 

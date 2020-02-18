@@ -107,7 +107,7 @@ fn marshal_element(element : &Element) -> Vec<u8> {
     bytes
 }
 
-fn marshal_instructions(instrs : &Vec<Instr>) -> Vec<u8> {
+fn marshal_instructions(instrs : &[Instr]) -> Vec<u8> {
     let mut bytes : Vec<u8> = vec![];
     for instr in instrs {
         match *instr {
@@ -118,7 +118,7 @@ fn marshal_instructions(instrs : &Vec<Instr>) -> Vec<u8> {
     bytes
 }
 
-fn marshal_consts(consts : &Vec<Element>) -> Vec<u8> {
+fn marshal_consts(consts : &[Element]) -> Vec<u8> {
     let mut bytes : Vec<u8> = vec![];
     for element in consts {
         bytes.extend(marshal_element(element));

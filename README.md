@@ -39,12 +39,26 @@ What's been done so far on the front-end:
         come from nested closures (nested closures implement currying).
   - [ ] Optimise functions for tail calls.
   - [ ] Track variable and function types.
-  - [ ] Marshaling, i.e. serialising the bytecode and storing it in a file
+  - [x] Marshaling, i.e. serialising the bytecode and storing it in a file
         for future interpretation and execution by the virtual machine.
   - [ ] ...
 
 The VM, i.e. the backend for the language, is being developed independently
 and will have its own progress and check-list updates.
+
+### Compile & Run
+
+In your shell, in the root of this repository, you may write:
+```
+cargo run [source-file-to-compile]
+```
+
+For example, you can run.
+```sh
+cargo run test_source.vh
+```
+to demonstrate compilation with the included test-file (`test_source.vh`).
+The argument of a source-file to compile is, of course, necessary.
 
 ### Example of what the compiler currently does:
 [current_compiler_test.md](https://github.com/valhalla-lang/valhallac/blob/master/current_compiler_test.md)
