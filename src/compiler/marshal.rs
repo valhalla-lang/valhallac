@@ -6,7 +6,7 @@
  *   strings and blocks.
  *
  * Compiled Bytecode Format:
- * ```
+ * ```ignore
  *  | VERSION [u8; 3]
  *  | MARSHALLED CODE BLOCK:
  *  |  | source-filename [u8; x] (abs path, null terminated, utf8)
@@ -23,7 +23,7 @@
  *  |  |     (contains stream of operators and operands)
  *  |  | (block end: 0x00 (EOI))
  * ```
-!*/
+ */
 use std::collections::HashMap;
 
 use super::element;
