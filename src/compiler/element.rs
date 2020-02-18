@@ -47,8 +47,8 @@ pub enum Element<'a> {
     EReal(f64),
     EString(&'a str),
     ESymbol(Symbol),
-    ECode(block::LocalBlock<'a>),
-    ESet(types::Set<'a>),
+    ECode(Box<block::LocalBlock<'a>>),
+    ESet(Box<types::Set<'a>>),
     ENil
 }
 

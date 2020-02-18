@@ -44,21 +44,21 @@ pub enum TokenType {
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match *self {
-            TokenType::Ident  => "Identifier",
-            TokenType::Num    => "Numeric",
-            TokenType::Op     => "Operator",
-            TokenType::Sym    => "Symbol",
-            TokenType::Str    => "String",
-            TokenType::LParen => "L-Paren",
-            TokenType::RParen => "R-Paren",
-            TokenType::LBrack => "L-Bracket",
-            TokenType::RBrack => "R-Bracket",
-            TokenType::LBrace => "L-Brace",
-            TokenType::RBrace => "R-Brace",
-            TokenType::LVec   => "L-Vector",
-            TokenType::RVec   => "R-Vector",
-            TokenType::Term   => "Terminator",
-            TokenType::EOF    => "End-Of-File",
+            Self::Ident  => "Identifier",
+            Self::Num    => "Numeric",
+            Self::Op     => "Operator",
+            Self::Sym    => "Symbol",
+            Self::Str    => "String",
+            Self::LParen => "L-Paren",
+            Self::RParen => "R-Paren",
+            Self::LBrack => "L-Bracket",
+            Self::RBrack => "R-Bracket",
+            Self::LBrace => "L-Brace",
+            Self::RBrace => "R-Brace",
+            Self::LVec   => "L-Vector",
+            Self::RVec   => "R-Vector",
+            Self::Term   => "Terminator",
+            Self::EOF    => "End-Of-File",
         };
         write!(f, "{}", printable)
     }
@@ -94,15 +94,17 @@ impl Token {
             _ => false,
         }
     }
+}
 
-    /// String representation of the token.
-    pub fn to_string(&self) -> String {
+/// String representation of the token.
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut escaped = escape(&self.string.to_string()).into_owned();
         if !escaped.ends_with('"') {
             escaped = format!("\"{}\"", escaped);
         }
 
-        format!("[ {class}:{spaces1}{rep}{spaces2}({l}, {c}):{span} ]",
+        write!(f, "[ {class}:{spaces1}{rep}{spaces2}({l}, {c}):{span} ]",
             class=self.class, rep=escaped,
             spaces1=" ".repeat(12 - self.class.to_string().width()),
             spaces2=" ".repeat(50 - escaped.width()),

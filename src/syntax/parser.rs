@@ -115,14 +115,17 @@ impl<'a> ParseEnvironment<'a> {
             TokenType::Str => ast::StrNode::new( &token.string, loc),
             TokenType::Sym => ast::SymNode::new( &token.string, loc),
             TokenType::LParen => {
-                let current = self.stream.get(0);
-                if current.is_none() || current.unwrap().class == TokenType::EOF {
-                    self.expect(TokenType::RParen, current)
-                } else if current.unwrap().class == TokenType::RParen {
-                    self.shift();
-                    return ast::EmptyNode::new(loc);
+                let maybe_current = self.stream.get(0);
+                if let Some(current) = maybe_current {
+                    if current.class == TokenType::RParen {
+                        self.shift();
+                        return ast::EmptyNode::new(loc);
+                    } else if current.class == TokenType::EOF {
+                        self.expect(TokenType::RParen, maybe_current);
+                    }
+                } else {
+                    self.expect(TokenType::RParen, None);
                 }
-
 
                 self.ignore_newline = true;
                 self.skip_newlines();
@@ -133,7 +136,7 @@ impl<'a> ParseEnvironment<'a> {
                 self.shift();
                 expr
             }
-            _ => issue!(err::Types::ParseError, self.file, token,
+            _ => issue!(ParseError, self.file, token,
                     "`{}` has no null-denotation.", token.class)
         }
     }
@@ -202,12 +205,12 @@ impl<'a> ParseEnvironment<'a> {
 
     fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
         if maybe_t.is_none() {
-            issue!(err::Types::ParseError, self.file, self.stream.iter().last().unwrap(),
+            issue!(ParseError, self.file, self.stream.iter().last().unwrap(),
                 "Unexpected end of stream.");
         }
         let t = maybe_t.unwrap();
         if t.class != tt {
-            issue!(err::Types::ParseError, self.file, t,
+            issue!(ParseError, self.file, t,
                 "Unexpected token type: `{}`, expected: `{}`.", t.class, tt);
         }
     }

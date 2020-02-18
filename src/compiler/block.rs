@@ -16,9 +16,9 @@ use num_traits::cast::FromPrimitive;
 
 use super::internal_functions;
 
-fn append_unique<'a, T : Clone + PartialEq>(v : &mut Vec<T>, e : T) -> usize {
+fn append_unique<T : Clone + PartialEq>(v : &mut Vec<T>, e : T) -> usize {
     let index = v.iter().position(|c| c == &e);
-    if index.is_none() { v.push(e.clone()); }
+    if index.is_none() { v.push(e); }
     index.unwrap_or(v.len() - 1)
 }
 
@@ -44,12 +44,14 @@ pub struct LocalBlock<'a> {
     pub return_type  : ast::StaticTypes,
 
     // Used only for compilation:
-    locals_map : HashMap<String, u16>,
+    pub locals_map : HashMap<String, u16>,
     types_to_check : VecDeque<IdentTypePair<'a>>,
     current_line  : usize,
     current_depth : usize,
-    stack_depth   : usize,
-    last_instruction : Instr
+    pub stack_depth   : usize,
+    last_instruction : Instr,
+    last_const_push_index : u16,
+    last_depth_delta : isize,
 }
 
 impl<'a> PartialEq for LocalBlock<'a> {
@@ -75,17 +77,26 @@ impl<'a> LocalBlock<'a> {
             current_line:  0,
             stack_depth:   0,
             current_depth: 0,
-            last_instruction: Instr::Operator(0)
+            last_instruction: Instr::Operator(0),
+            last_const_push_index: 0xffff,
+            last_depth_delta: 0,
         }
     }
 
     fn push_const_instr(&mut self, e : Element<'a>) {
         let index = append_unique(&mut self.constants, e) as u16;
-        self.push_operator(Operators::PUSH_CONST);
-        self.push_operand(index);
+
+        // Don't push constant if:
+        //    (already on stack) and (stack depth has stayed the same)
+        if !(index == self.last_const_push_index && self.last_depth_delta == 0) {
+            self.push_operator(Operators::PUSH_CONST);
+            self.push_operand(index);
+            self.last_const_push_index = index;
+        }
     }
 
     fn change_stack_depth(&mut self, i : isize) {
+        self.last_depth_delta = i;
         self.current_depth = (
             (self.current_depth as isize) + i
         ) as usize;
@@ -119,11 +130,11 @@ impl<'a> LocalBlock<'a> {
 
     fn ident_assignment(&mut self, left : &'a ast::IdentNode, right : &'a Nodes) {
         if self.types_to_check.is_empty() {
-            issue!(err::Types::TypeError, &self.filename, err::NO_TOKEN, self.current_line,
+            issue!(TypeError, &self.filename, err::NO_TOKEN, self.current_line,
                 "You must state what set `{}' is a member of. No type-annotation found.", left.value);
         }
         if self.locals_map.contains_key(&left.value) {
-            issue!(err::Types::CompError, &self.filename, err::NO_TOKEN, self.current_line,
+            issue!(CompError, &self.filename, err::NO_TOKEN, self.current_line,
                 "Cannot mutate value of `{}', as it is already bound.", left.value);
         }
         let index = self.insert_local(left.value.to_owned());
@@ -167,7 +178,7 @@ impl<'a> LocalBlock<'a> {
                 super_block.insert_local(arguments[i].ident().unwrap().value.to_owned());
 
                 let block_name = last_block.name.clone();
-                super_block.push_const_instr(Element::ECode(last_block));
+                super_block.push_const_instr(Element::ECode(Box::new(last_block)));
                 super_block.push_const_instr(Element::ESymbol(Symbol::new(&block_name)));
                 super_block.push_operator(Operators::MAKE_FUNC);
                 super_block.yield_last();
@@ -176,7 +187,7 @@ impl<'a> LocalBlock<'a> {
 
             let index = self.insert_local(ident.value.to_owned());
 
-            self.push_const_instr(Element::ECode(last_block));
+            self.push_const_instr(Element::ECode(Box::new(last_block)));
             self.push_const_instr(Element::ESymbol(Symbol::new(&ident.value)));
             self.push_operator(Operators::MAKE_FUNC);
             self.push_operator(Operators::STORE_LOCAL);
@@ -198,11 +209,11 @@ impl<'a> LocalBlock<'a> {
         let current_line = node.location().line as usize;
         if self.current_line != current_line {
             let len = self.instructions.len();
-            if len > 1 {
-                if self.instructions[len - 2] == Instr::Operator(Operators::SET_LINE as u8) {
-                    self.instructions.pop();
-                    self.instructions.pop();
-                }
+            if len > 1
+            && self.instructions[len - 2]
+               == Instr::Operator(Operators::SET_LINE as u8) {
+                self.instructions.pop();
+                self.instructions.pop();
             }
             self.current_line = current_line;
             self.push_operator(Operators::SET_LINE);
@@ -257,22 +268,22 @@ impl<'a> LocalBlock<'a> {
 
                         if let Some(cast_name) = args[1].get_name() {
                             let cast_to : u16 = match cast_name {
-                                "Real" => 0b00000011,
-                                "Int"  => 0b00000010,
-                                "Nat"  => 0b00000001,
-                                _ => issue!(err::Types::TypeError, &self.filename, err::NO_TOKEN, self.current_line,
+                                "Real" => 0b0000_0011,
+                                "Int"  => 0b0000_0010,
+                                "Nat"  => 0b0000_0001,
+                                _ => issue!(TypeError, &self.filename, err::NO_TOKEN, self.current_line,
                                     "Compiler does not know how to cast to `{}'.", cast_name)
                             };
                             let cast_from = match args[0].yield_type() {
-                                ast::StaticTypes::TReal    => 0b00000011,
-                                ast::StaticTypes::TInteger => 0b00000010,
-                                ast::StaticTypes::TNatural => 0b00000001,
-                                _ => issue!(err::Types::TypeError, &self.filename, err::NO_TOKEN, self.current_line,
+                                ast::StaticTypes::TReal    => 0b0000_0011,
+                                ast::StaticTypes::TInteger => 0b0000_0010,
+                                ast::StaticTypes::TNatural => 0b0000_0001,
+                                _ => issue!(TypeError, &self.filename, err::NO_TOKEN, self.current_line,
                                     "Compiler does not know how to cast from `{}'.", args[0].yield_type())
                             };
                             self.push_operand(cast_from << 8 | cast_to);
                         } else {
-                            issue!(err::Types::CompError, &self.filename, err::NO_TOKEN, self.current_line,
+                            issue!(CompError, &self.filename, err::NO_TOKEN, self.current_line,
                                 "Cast-type provided to `cast' has to be a type-name.")
                         }
                         return;
@@ -294,7 +305,7 @@ impl<'a> LocalBlock<'a> {
                         // If the LHS is not an ident, it is not a
                         //   valid annotation.
                         if args[0].ident().is_none() {
-                            issue!(err::Types::CompError, &self.filename, err::NO_TOKEN, self.current_line,
+                            issue!(CompError, &self.filename, err::NO_TOKEN, self.current_line,
                                 "Left of `:` type annotator must be an identifier.");
                         }
                         let left = args[0].ident().unwrap();
@@ -329,7 +340,7 @@ impl<'a> LocalBlock<'a> {
         self.push_operator(Operators::YIELD);
     }
 
-    pub fn generate(&mut self, nodes : &'a Vec<Nodes>) {
+    pub fn generate(&mut self, nodes : &'a [Nodes]) {
         for node in nodes {
             self.emit(node);
         }
@@ -340,31 +351,31 @@ impl<'a> LocalBlock<'a> {
 impl<'a> fmt::Display for LocalBlock<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for c in &self.constants {
-            if let Element::ECode(local_block) = c {
-                write!(f, "{}", local_block)?;
+            if let Element::ECode(local_block_box) = c {
+                write!(f, "{}", *local_block_box)?;
             }
         }
         write!(f, "\n{}:", self.name)?;
-        write!(f,"
+        writeln!(f,"
   |[meta]:
   |  stack-depth: {}
-  |    file-name: {}\n",
+  |    file-name: {}",
             self.stack_depth,
             self.filename)?;
 
-        write!(f, "  |====Constants===============\n")?;
+        writeln!(f, "  |====Constants===============")?;
         for (i, c) in self.constants.iter().enumerate() {
-            write!(f, "  | {: >3} |  {}\n", i, c)?;
+            writeln!(f, "  | {: >3} |  {}", i, c)?;
         }
-        write!(f, "  |====Locals==================\n")?;
+        writeln!(f, "  |====Locals==================")?;
         for key in self.locals_map.keys() {
-            write!(f, "  | {: >3} |  {}\n", self.locals_map[key], key)?;
+            writeln!(f, "  | {: >3} |  {}", self.locals_map[key], key)?;
         }
-        write!(f, "  |====Globals=================\n")?;
+        writeln!(f, "  |====Globals=================")?;
         for (i, c) in self.globals.iter().enumerate() {
-            write!(f, "  | {: >3} |  {}\n", i, c)?;
+            writeln!(f, "  | {: >3} |  {}", i, c)?;
         }
-        write!(f, "  |====Bytecodes===============\n")?;
+        writeln!(f, "  |====Bytecodes===============")?;
         for inst in &self.instructions {
             if let Instr::Operand(_) = inst {
                 write!(f, "{}", inst)?;
