@@ -171,14 +171,16 @@ pub fn generate_binary(blk : &block::LocalBlock) -> Vec<u8> {
     let mut bytes = crate::VERSION.to_vec();
     bytes.extend(marshal_block(blk));
 
-    print!("Bytes:\n  ");
-    let mut i = 1;
-    for byte in &bytes {
-        print!("{:02x} ", byte);
-       if i % 16 == 0 { print!("\n  ") };
-        i += 1;
+    #[cfg(feature="debug")] {
+        print!("Bytes:\n  ");
+        let mut i = 1;
+        for byte in &bytes {
+            print!("{:02x} ", byte);
+        if i % 16 == 0 { print!("\n  ") };
+            i += 1;
+        }
+        println!();
     }
-    println!();
 
     bytes
 }

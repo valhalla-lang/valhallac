@@ -10,6 +10,9 @@ A <> B
 --  /    \
 -- <>     A
 
+
+-- say we have the function definition:
+
 f : A -> B -> C
 f a b = c where c = a + b
 

@@ -5,7 +5,7 @@ use super::super::err;
 
 use super::super::syntax;
 use syntax::ast;
-use syntax::ast::Nodes;
+use syntax::ast::{Nodes, StaticTypes};
 
 use super::element;
 use super::instructions;
@@ -105,6 +105,7 @@ impl<'a> LocalBlock<'a> {
         }
     }
 
+    /// Pushes an operator onto the _instruction stack_.
     fn push_operator(&mut self, o : Operators) {
         let instr = Instr::Operator(o as u8);
         if !o.takes_operand() {
@@ -114,6 +115,7 @@ impl<'a> LocalBlock<'a> {
         self.instructions.push(instr);
     }
 
+    /// Pushes an operand onto the _instruction stack_.
     fn push_operand(&mut self, i : u16) {
         let operand = Instr::Operand(i);
         self.instructions.push(operand);
@@ -247,8 +249,19 @@ impl<'a> LocalBlock<'a> {
                     let mut do_return = true;
                     match ident_node.value.as_str() {
                         "__raw_print" => {
-                            self.emit(&call_node.operands[0]);
+                            let arg = &call_node.operands[0];
+
+                            let print_type : u16 = match arg.yield_type() {
+                                StaticTypes::TNatural => 0x01,
+                                StaticTypes::TInteger => 0x02,
+                                StaticTypes::TReal    => 0x03,
+                                StaticTypes::TString  => 0x04,
+                                _ => panic!("RAW_PRINT cannot display this type.")
+                            };
+
+                            self.emit(arg);
                             self.push_operator(Operators::RAW_PRINT);
+                            self.push_operand(print_type);
                         }
                         _ => do_return = false
                     };

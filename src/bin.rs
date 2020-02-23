@@ -1,19 +1,27 @@
 use valhallac;
 
 use std::env;
-use std::fs::File;
+use std::{fs::File, path::Path};
 use std::io::Write;
 
 fn is_vh_file(filename : &String) -> bool {
-    filename.ends_with(".vh")
+    filename.ends_with(".vh") && Path::new(filename).exists()
 }
 
 pub fn main() -> Result<(), i32> {
-    let args = env::args();
+    let mut args = env::args();
+    args.next();
 
-    let files = args.filter(is_vh_file);
+    let mut files = args.filter(is_vh_file).peekable();
+
+    if files.peek().is_none() {
+        println!("No valid input file given.");
+        std::process::exit(1);
+    }
 
     for file in files {
+        #[cfg(not(feature="debug"))]
+        println!("Compiling `{}`...", file);
         // Parse source into tree.
         let root = valhallac::parse(&file);
         // Then compile into series of instructions,
@@ -27,8 +35,11 @@ pub fn main() -> Result<(), i32> {
         let bytes = valhallac::binary_blob(&block);
 
         // Write blob to file.
-        let mut file = File::create(out).expect("Could not create binary.");
+        let mut file = File::create(&out).expect("Could not create binary.");
         file.write_all(&bytes).expect("Could not write to binary.");
+
+        #[cfg(not(feature="debug"))]
+        println!("Binary written to `{}`.", out);
     }
     Ok(())
 }

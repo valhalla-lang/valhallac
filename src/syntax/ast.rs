@@ -264,6 +264,9 @@ pub struct EmptyNode {
 }
 
 /// All base types, determined at compile time.
+/// The order the types are presented below, is
+/// generally how we reference the types in the
+/// compiled bytecode numerically (e.g. TReal => 3).
 #[derive(Debug, Clone, PartialEq)]
 pub enum StaticTypes {
     TNatural, TInteger, TReal,

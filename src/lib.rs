@@ -28,6 +28,8 @@ pub fn compile(root : &syntax::ast::Root) -> compiler::block::LocalBlock {
     let mut code_block = compiler::block::LocalBlock::new("<main>", &root.filename);
 
     code_block.generate(&root.branches);
+
+    #[cfg(feature="debug")]
     println!("Code Blocks:\n{}", code_block);
     code_block
 }
