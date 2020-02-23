@@ -270,8 +270,10 @@ impl TypeChecker {
 
                                         let maybe_type = self.ident_map.get(&base_node.ident().unwrap().value);
                                         if maybe_type.is_none() {
-                                            println!("{}", base_node);
-                                            println!("{:?}", self.ident_map);
+                                            #[cfg(feature="debug")] {
+                                                println!("{}", base_node);
+                                                println!("{:?}", self.ident_map);
+                                            }
                                             issue!(TypeError,
                                                 self.source_file.as_str(),
                                                 err::NO_TOKEN, self.source_line,
@@ -346,18 +348,18 @@ pub fn replace(root : &mut ast::Root) {
     let length = root.branches.len();
     let mut i = 0;
     while i < length {
-        { // START TOP-LEVEL TYPE-CHECKING
+        { // TOP-LEVEL TYPE-CHECKING
             let new = type_checker.type_branch(&root.branches[i]);
             root.branches[i] = new;
-        } // END TOP-LEVEL TYPE-CHECKING
-        { // START TOP-LEVEL CONSTANT FOLD
+        }
+        { // TOP-LEVEL CONSTANT FOLD
             let new = const_fold(&root.branches[i]);
             root.branches[i] = new;
-        } // END TOP-LEVEL CONSTANT FOLD
-        { // START TOP-LEVEL TYPE BALANCING
+        }
+        { // TOP-LEVEL TYPE BALANCING
             let new = balance_types(&root.branches[i]);
             root.branches[i] = new;
-        } // END TOP-LEVEL TYPE BALANCING
+        }
         i += 1;
     }
 }

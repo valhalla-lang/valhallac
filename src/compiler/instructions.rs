@@ -12,7 +12,7 @@ pub enum Instr {
 impl Instr {
     pub fn depth_delta(self, maybe_operand : Option<Instr>) -> isize {
         if let Instr::Operand(_) = self
-        { panic!("An operand does not have an impact on stack depth."); }
+        { panic!("An operand does not have an effect on stack depth."); }
 
         if let Some(instr_operand) = maybe_operand {
             if let Instr::Operand(operand) = instr_operand {
@@ -25,6 +25,7 @@ impl Instr {
                     Operators::STORE_LOCAL => -1,
                     Operators::DUP_N       => operand as isize,
                     Operators::CAST        =>  0,
+                    Operators::RAW_PRINT   =>  0,
                     Operators::SET_LINE    =>  0,
                     _ => panic!("This type of opcode doesn't take operands.")
                 };
@@ -42,7 +43,6 @@ impl Instr {
                 Operators::CHECK_TYPE => -2,
                 Operators::MAKE_FUNC  => -1,
                 Operators::YIELD      => -1,
-                Operators::RAW_PRINT  =>  0,
                 Operators::NOP => 0,
                 _ => panic!("This opcode must take an operand.")
             };
@@ -87,7 +87,7 @@ pub enum Operators {
     CAST        = 11,  // TAKES 2 OPERAND(s) (2 operands, 1 out of 2 bytes for each)
     MAKE_FUNC   = 12,  // TAKES 0 OPERAND(s)
     YIELD       = 13,  // TAKES 0 OPERAND(s)
-    RAW_PRINT   = 14,  // TAKES 0 OPERAND(s)
+    RAW_PRINT   = 14,  // TAKES 1 OPERAND(s)
 
     N_ADD       = 40,  // TAKES 0 OPERAND(s)
     I_ADD       = 41,  // TAKES 0 OPERAND(s)
@@ -124,6 +124,7 @@ impl Operators {
             | Self::STORE_LOCAL
             | Self::DUP_N
             | Self::CAST
+            | Self::RAW_PRINT
             | Self::SET_LINE => true,
             _ => false
         }
@@ -149,7 +150,7 @@ impl fmt::Display for Operators {
             Operators::CAST        => "CAST",
             Operators::MAKE_FUNC   => "MAKE_FUNC\n",
             Operators::YIELD       => "YIELD\n",
-            Operators::RAW_PRINT   => "RAW_PRINT\n",
+            Operators::RAW_PRINT   => "RAW_PRINT",
 
             Operators::N_ADD       => "N_ADD\n",
             Operators::I_ADD       => "I_ADD\n",

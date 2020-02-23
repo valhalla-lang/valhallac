@@ -53,7 +53,7 @@ macro_rules! push_op {
 
 impl<'a> PrecedenceTable<'a> {
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     pub fn new_op(&mut self, name : &'a str, prec : i32, assoc : Side, arity : i32) -> Operator {

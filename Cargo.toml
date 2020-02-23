@@ -6,12 +6,14 @@ repository    = "https://github.com/Demonstrandum/valhalla"
 documentation = "https://github.com/Demonstrandum/valhalla"
 keywords = ["set-theory", "programming", "language", "parser", "compiler"]
 categories = ["parser-implementations", "parsing", "encoding", "command-line-interface"]
-#license = "GPL-3.0"
-license-file = "LICENSE.md"
+license = "GPL-3.0"
 readme = "README.md"
 version = "0.1.0"
 authors = ["Demonstrandum <moi@knutsen.co>"]
 edition = "2018"
+
+[features]
+debug = []  # No deps.
 
 [lib]
 name = "valhallac"
