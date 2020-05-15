@@ -49,13 +49,19 @@ and will have its own progress and check-list updates.
 ### Compile & Run
 
 In your shell, in the root of this repository, you may write:
+```console
+cargo run [source-file-to-compile.vh] [-o out-file] [-v]
 ```
-cargo run [source-file-to-compile]
+
+or, have the compiler print out debug information like token streams, syntax trees, symbol tables, bytecode instructions, &ct., use `--features=debug`:
+
+```console
+cargo run --features=debug [source-file.vh]
 ```
 
 For example, you can run.
-```sh
-cargo run test_source.vh
+```console
+cargo run test_source.vh -v  # (verbose)
 ```
 to demonstrate compilation with the included test-file (`test_source.vh`).
 The argument of a source-file to compile is, of course, necessary.

@@ -1,3 +1,5 @@
+use crate::err;
+
 use super::token;
 use token::{Token, TokenType};
 
@@ -40,6 +42,7 @@ impl RegexExt for Regex {
 /// All chars that may constitue an ident.
 const IDENT_CHARS : &str = r"\p{L}\?!'\-_";
 
+// TODO: Parse symbols with spaces? `:"..."` syntax.
 lazy_static! {
     static ref OP    : Regex = re!(r"\A([,\+\.\*\|\\/\&%\$\^\~<¬=@>\-]+|:{2,})");
     static ref IDENT : Regex = re!(&format!(r"\A([{id}][{id}\p{{N}}]*)", id=IDENT_CHARS));
@@ -58,14 +61,16 @@ macro_rules! try_match {
                 location::new($line, $col, span)));
             $current_char_ptr += matched.len();
             $col += span;
-            continue;
+            $stream.back()
+        } else {
+            None
         }
     };
 }
 
 /// Takes a piece of code (as a &str) and returns
 /// the generated token-stream (as a VecDeque<Token>).
-pub fn lex(string : &str) -> VecDeque<Token> {
+pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
     let mut token_stream : VecDeque<Token> = VecDeque::new();
 
     let mut current_char_ptr = 0;
@@ -218,28 +223,45 @@ pub fn lex(string : &str) -> VecDeque<Token> {
             continue;
         }
 
-        try_match!(token_stream, partial,
+        let matched = try_match!(token_stream, partial,
             NUM, TokenType::Num,
             current_char_ptr, line, col);
+        if matched.is_some() { continue; }
 
-        try_match!(token_stream, partial,
+        let matched = try_match!(token_stream, partial,
             OP, TokenType::Op,
             current_char_ptr, line, col);
+        if matched.is_some() { continue; }
 
-        try_match!(token_stream, partial,
+        let matched = try_match!(token_stream, partial,
             IDENT, TokenType::Ident,
             current_char_ptr, line, col);
+        if matched.is_some() { continue; }
 
-        try_match!(token_stream, partial,
+        let matched = try_match!(token_stream, partial,
             SYM, TokenType::Sym,
             current_char_ptr, line, col);
+        if let Some(token) = matched {
+            if two_chars == ":)" {
+                warn!(LexWarn, filename, token,
+                    "Nice smiley-face, but are you sure you wanted to \
+                     use a `Symbol' here?  Use `:\")\"` to be more explicit.");
+            }
+            continue;
+        }
 
         current_char_ptr += 1;
         if partial.is_char_boundary(0) { col += 1 }
     }
 
+    let mut last_location = location::new(0, 0, 1);
+    if let  Some(last_token) = token_stream.back() {
+        last_location = last_token.location;
+    }
+
     token_stream.push_back(Token::new(
         TokenType::EOF, "\0",
-        location::new(line, col, 1)));
+        last_location));
+
     token_stream
 }

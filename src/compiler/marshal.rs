@@ -1,11 +1,11 @@
 /*!
- * NOTES:
+ * # NOTES
  * - No top level bytes should be `0x00`.
  *   This includes constant specifiers, operators (operands are OK),
  *   etc.  0x00 should be reserved as a terminator for certain
  *   strings and blocks.
  *
- * Compiled Bytecode Format:
+ * ## Compiled Bytecode Format
  * ```ignore
  *  | VERSION [u8; 3]
  *  | MARSHALLED CODE BLOCK:
@@ -24,6 +24,7 @@
  *  |  | (block end: 0x00 (EOI))
  * ```
  */
+
 use std::collections::HashMap;
 
 use super::element;
@@ -33,12 +34,11 @@ use super::block;
 use element::Element;
 use instructions::Instr;
 
-// This ain't gonna be fun.
-
 
 /// Gives each type a specifier prefix to identify them.
 fn constant_ident_prefix(element : &Element) -> u8 {
     return match element {
+        Element::ENil        => 0xff, // Nil is technically not a prefix.
         Element::ENatural(_) => 0x01,
         Element::EInteger(_) => 0x02,
         Element::EReal(_)    => 0x03,
@@ -83,6 +83,9 @@ macro_rules! num_marshal_append {
 fn marshal_element(element : &Element) -> Vec<u8> {
     let mut bytes : Vec<u8> = vec![];
     match element {
+        Element::ENil => {
+            bytes.push(constant_ident_prefix(element));
+        },
         Element::ENatural(n) => {
             bytes.push(constant_ident_prefix(element));
             num_marshal_append!(n, bytes);
@@ -102,7 +105,8 @@ fn marshal_element(element : &Element) -> Vec<u8> {
             num_marshal_append!(s_bytes_len, bytes);
             bytes.extend(s_bytes);
         }
-        _ => panic!("I do not know how to marshal this type.")
+        _ => panic!("I do not know how to marshal type of `{}'.",
+            element)
     };
     bytes
 }

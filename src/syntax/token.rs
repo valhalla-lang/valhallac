@@ -104,10 +104,10 @@ impl fmt::Display for Token {
             escaped = format!("\"{}\"", escaped);
         }
 
-        write!(f, "[ {class}:{spaces1}{rep}{spaces2}({l}, {c}):{span} ]",
+        write!(f, "[ {class}:{spaces1}{rep}{spaces2}{l}:{c} ({span}) ]",
             class=self.class, rep=escaped,
             spaces1=" ".repeat(12 - self.class.to_string().width()),
-            spaces2=" ".repeat(50 - escaped.width()),
+            spaces2=" ".repeat(30 - escaped.width()),
             l=self.location.line, c=self.location.col,
             span=self.location.span)
     }

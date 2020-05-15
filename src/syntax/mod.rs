@@ -22,9 +22,11 @@ pub mod lexer;
 pub mod parser;
 
 /// Tree static analysis.
-pub mod analyser;
+#[macro_use]
+pub mod analysis;
 
 use std::fs;
+use std::collections::HashSet;
 
 #[cfg(feature="debug")]
 use token::ShowStream;
@@ -38,13 +40,25 @@ pub fn parse_file(filename : &str) -> ast::Root {
     #[cfg(feature="debug")]
     println!("Code:\n{}\n", code);
 
-    let stream = lexer::lex(&code);
+    let stream = lexer::lex(&code, filename);
 
     #[cfg(feature="debug")]
     println!("Stream:\n{}\n", stream.to_string());
 
     let mut tree = parser::parse(stream, filename);
-    analyser::replace(&mut tree);
+    let transformations = transformations![
+        TYPE_RESOLUTION,
+        CONSTANT_FOLDING
+    ];
+
+    /* // No Opts
+    #[cfg(feature="debug")]
+    let transformations = transformations![
+        TYPE_RESOLUTION
+    ];
+    */
+
+    analysis::replace(&mut tree, transformations);
 
     #[cfg(feature="debug")]
     println!("AST:\n{}\n", tree);

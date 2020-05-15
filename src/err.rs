@@ -1,4 +1,7 @@
-use crate::syntax::token;
+#![allow(non_camel_case_types)]
+#![allow(clippy::pub_enum_variant_names)]
+
+use crate::syntax::{token::Token, location::Loc};
 
 use std::fs;
 use std::fmt;
@@ -9,48 +12,63 @@ use colored::*;
 
 use unindent::unindent;
 
-#[allow(non_camel_case_types)]
-pub struct NO_TOKEN;
+pub struct LINE;
+pub struct LOC;
 
-#[allow(clippy::pub_enum_variant_names)]
-pub enum ErrorType {
-    LexError,
-    ParseError,
-    TypeError,
-    CompError,
+pub enum IssueType {
+    LexError, LexWarn,
+    ParseError, ParseWarn,
+    TypeError, TypeWarn,
+    CompError, CompWarn
 }
 
-impl fmt::Display for ErrorType {
+impl fmt::Display for IssueType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let printable = match *self {
-            ErrorType::LexError   => "Lexicographical Error",
-            ErrorType::ParseError =>         "Grammar Error",
-            ErrorType::TypeError  =>          "Typing Error",
-            ErrorType::CompError  =>     "Compilation Error",
+            IssueType::LexError   => "Lexicographical Error".red(),
+            IssueType::ParseError =>         "Grammar Error".red(),
+            IssueType::TypeError  =>          "Typing Error".red(),
+            IssueType::CompError  =>     "Compilation Error".red(),
+            IssueType::LexWarn    => "Lexicographical Warning".yellow(),
+            IssueType::ParseWarn  =>         "Grammar Warning".yellow(),
+            IssueType::TypeWarn   => "         Typing Warning".yellow(),
+            IssueType::CompWarn   => "    Compilation Warning".yellow(),
         };
         write!(f, "{}", printable)
     }
 }
 
-pub fn tissue(class : ErrorType, filename : &str, token : &token::Token,  message : &str) {
-    let file = fs::File::open(filename).expect("Invalid filename for error message.");
-    let line = BufReader::new(file).lines().nth((token.location.line - 1) as usize).unwrap().unwrap();
+pub fn loc_issue(class : IssueType, filename : &str, loc : &Loc,  message : &str) {
+    eprintln!();
+    let file = fs::File::open(filename)
+        .expect("Invalid filename for error message.");
+    let line = BufReader::new(file).lines().nth((loc.line - 1) as usize)
+        .expect(&format!("Line ({}) does not exist, file is too short.", loc.line))
+        .expect("Could not get line.");
 
     let formatted = unindent(message).split('\n').collect::<Vec<&str>>().join("\n  ");
     eprintln!("{}{} {}", "issue".bold().red(), ":".white(), formatted.bold());
     eprint!("{}", "".clear());
     eprintln!(" ==> {class} in (`{file}`:{line}:{col}):\n{space}|\n{line_str}| {stuff}",
-        class=class.to_string().bold(), file=filename, line=token.location.line,
-        col=token.location.col, space=" ".repeat(5),
-        line_str=format!("{: >4} ", token.location.line.to_string().bold()), stuff=line);
+        class=class.to_string().bold(), file=filename, line=loc.line,
+        col=loc.col, space=" ".repeat(5),
+        line_str=format!("{: >4} ", loc.line.to_string().bold()), stuff=line);
     eprintln!("{space}|{: >offset$}",
-        "^".repeat(token.location.span as usize), space=" ".repeat(5),
-        offset=((token.location.col + token.location.span) as usize));
+        "^".repeat(loc.span as usize).yellow().bold(), space=" ".repeat(5),
+        offset=((loc.col + loc.span) as usize));
 }
 
-pub fn lissue(class : ErrorType, filename : &str, line_n : usize,  message : &str) {
-    let file = fs::File::open(filename).expect("Invalid filename for error message.");
-    let line = BufReader::new(file).lines().nth((line_n - 1) as usize).unwrap().unwrap();
+pub fn token_issue(class : IssueType, filename : &str, token : &Token,  message : &str) {
+    loc_issue(class, filename, &token.location, message);
+}
+
+pub fn line_issue(class : IssueType, filename : &str, line_n : usize,  message : &str) {
+    eprintln!();
+    let file = fs::File::open(filename)
+        .expect("Invalid filename for error message.");
+    let line = BufReader::new(file).lines().nth((line_n - 1) as usize)
+        .unwrap()
+        .unwrap();
 
     let formatted = unindent(message).split('\n').collect::<Vec<&str>>().join("\n  ");
     eprintln!("{}{} {}", "issue".bold().red(), ":".white(), formatted.bold());
@@ -63,34 +81,37 @@ pub fn lissue(class : ErrorType, filename : &str, line_n : usize,  message : &st
 }
 
 #[macro_export]
-macro_rules! issue {
-    ($type:ident, $file:expr, err::NO_TOKEN, $line:expr, $message:expr) => {
-        {
-            err::lissue(err::ErrorType::$type,
+macro_rules! warn {
+    ($type:ident, $file:expr, err::LINE, $line:expr, $message:expr) => {{
+            err::line_issue(err::IssueType::$type,
                 $file, $line, $message);
-            std::process::exit(1)
-        }
-    };
-    ($type:ident, $file:expr, err::NO_TOKEN, $line:expr,$message:expr, $($form:expr),*) => {
-        {
-            err::lissue(err::ErrorType::$type,
+    }};
+    ($type:ident, $file:expr, err::LINE, $line:expr, $message:expr, $($form:expr),*) => {{
+            err::line_issue(err::IssueType::$type,
                 $file, $line, &format!($message, $($form),*));
-            std::process::exit(1)
-        }
-    };
-    ($type:ident, $file:expr, $token:expr, $message:expr) => {
-        {
-            err::tissue(err::ErrorType::$type,
+    }};
+    ($type:ident, $file:expr, err::LOC, $loc:expr, $message:expr) => {{
+            err::loc_issue(err::IssueType::$type,
+                $file, $loc, $message);
+    }};
+    ($type:ident, $file:expr, err::LOC, $loc:expr, $message:expr, $($form:expr),*) => {{
+            err::loc_issue(err::IssueType::$type,
+                $file, $loc, &format!($message, $($form),*));
+    }};
+    ($type:ident, $file:expr, $token:expr, $message:expr) => {{
+            err::token_issue(err::IssueType::$type,
                 $file, $token, $message);
-            std::process::exit(1)
-        }
-    };
-    ($type:ident, $file:expr, $token:expr, $message:expr, $($form:expr),*) => {
-        {
-            err::tissue(err::ErrorType::$type,
+    }};
+    ($type:ident, $file:expr, $token:expr, $message:expr, $($form:expr),*) => {{
+            err::token_issue(err::IssueType::$type,
                 $file, $token, &format!($message, $($form),*));
-            std::process::exit(1)
-        }
-    };
+    }};
 }
 
+#[macro_export]
+macro_rules! issue {
+    ($type:ident, $($args:tt)*) => {{
+        warn!($type, $($args)*);
+        std::process::exit(1)
+    }};
+}
