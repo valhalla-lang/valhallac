@@ -258,7 +258,7 @@ pub struct FileNode {
 }
 
 #[derive(Clone)]
-pub struct EmptyNode {
+pub struct NilNode {
     /// Source location.
     pub location : Loc,
 }
@@ -267,11 +267,12 @@ pub struct EmptyNode {
 /// The order the types are presented below, is
 /// generally how we reference the types in the
 /// compiled bytecode numerically (e.g. TReal => 3).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StaticTypes {
     TNatural, TInteger, TReal,
     TString, TSymbol,
     TSet(Box<StaticTypes>),
+    /// TFunction(boxed operand type, boxed return type)
     TFunction(Box<StaticTypes>, Box<StaticTypes>),
 
     TNil,
@@ -279,6 +280,13 @@ pub enum StaticTypes {
 }
 
 impl StaticTypes {
+    pub fn set_inner(&self) -> Option<StaticTypes> {
+        if let StaticTypes::TSet(box_inner) = self {
+            return Some(*box_inner.clone());
+        }
+        None
+    }
+
     pub fn is_number(&self) -> bool {
         match self {
             StaticTypes::TNatural
@@ -308,7 +316,7 @@ impl fmt::Display for StaticTypes {
                     ss = format!("({} \u{1f852} {})", o, r);
                     ss.as_str()
                 },
-                StaticTypes::TNil     => "Nil",
+                StaticTypes::TNil     => "Empty",
                 StaticTypes::TUnknown => "Any",
                 _ => {
                     ss = format!("Set {}", st);
@@ -319,7 +327,7 @@ impl fmt::Display for StaticTypes {
                 ss = format!("({} \u{21a6} {})", o, r);
                 ss.as_str()
             },
-            StaticTypes::TNil     => "nil",
+            StaticTypes::TNil     => "nothing",
             StaticTypes::TUnknown => "anything",
         };
         write!(f, "{}", s)
@@ -336,7 +344,7 @@ pub enum Nodes {
     Call(CallNode),
     Block(BlockNode),
     File(FileNode),
-    Empty(EmptyNode),
+    Nil(NilNode),
 }
 
 
@@ -358,7 +366,7 @@ impl fmt::Display for Nodes {
                 .collect::<Vec<String>>()
                 .join("\n")),
             Nodes::File(node)   => format!("%file{{ :filename {} }}", node.filename),
-            Nodes::Empty(_)     => String::from("()"),
+            Nodes::Nil(_)       => String::from("()"),
         };
         write!(f, "{}", printable)
     }
@@ -382,7 +390,7 @@ impl Nodes {
             Nodes::Num(n)   => n.location,
             Nodes::Str(n)   => n.location,
             Nodes::Sym(n)   => n.location,
-            Nodes::Empty(n) => n.location,
+            Nodes::Nil(n) => n.location,
             Nodes::Block(n) => n.location,
             Nodes::File(n)  => n.location,
         }
@@ -407,8 +415,8 @@ impl Nodes {
                     "Real" => StaticTypes::TSet(Box::new(StaticTypes::TReal)),
                     "Str"  => StaticTypes::TSet(Box::new(StaticTypes::TString)),
                     "Sym"  => StaticTypes::TSet(Box::new(StaticTypes::TSymbol)),
-                    "Nil"  => StaticTypes::TSet(Box::new(StaticTypes::TNil)),
-                    "Any" => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
+                    "Empty"=> StaticTypes::TSet(Box::new(StaticTypes::TNil)),
+                    "Any"  => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
                     _ => ident.static_type.to_owned()
                 }
             },
@@ -439,7 +447,7 @@ impl Nodes {
             },
             Nodes::Block(_)
             | Nodes::File(_) => StaticTypes::TUnknown,
-            Nodes::Empty(_) => StaticTypes::TNil,
+            Nodes::Nil(_)    => StaticTypes::TNil,
         }
     }
 
@@ -455,12 +463,12 @@ impl Nodes {
         match self {
             Nodes::Ident(_) => "identifier",
             Nodes::Num(_)   => "numeric",
-            Nodes::Str(_)   => "string",
+            Nodes::Str(_)   => "string literal",
             Nodes::Sym(_)   => "symbol",
-            Nodes::Empty(_) => "empty",
-            Nodes::Call(_)  => "function-call",
-            Nodes::Block(_) => "code-block",
-            _ => "ungrammatical-meta-node"
+            Nodes::Nil(_)   => "nothing",
+            Nodes::Call(_)  => "function call",
+            Nodes::Block(_) => "code block",
+            _ => "ungrammatical meta node"
         }
     }
 
@@ -480,7 +488,7 @@ impl Nodes {
     pub fn  call(&self) -> Option<&CallNode>  { unwrap_enum!(self, Nodes::Call)  }
     pub fn block(&self) -> Option<&BlockNode> { unwrap_enum!(self, Nodes::Block) }
     pub fn  file(&self) -> Option<&FileNode>  { unwrap_enum!(self, Nodes::File)  }
-    pub fn empty(&self) -> Option<&EmptyNode> { unwrap_enum!(self, Nodes::Empty) }
+    pub fn   nil(&self) -> Option<&NilNode>   { unwrap_enum!(self, Nodes::Nil)   }
 
     pub fn is_atomic(&self) -> bool {
         match self {
@@ -488,7 +496,7 @@ impl Nodes {
             | Nodes::Num(_)
             | Nodes::Str(_)
             | Nodes::Sym(_)
-            | Nodes::Empty(_)  => true,
+            | Nodes::Nil(_)  => true,
             _ => false
         }
     }
@@ -542,8 +550,10 @@ impl CallNode {
         self.return_type = new_type;
     }
 
+    /// Collect arguments to a call.
     pub fn collect(&self) -> Vec<Nodes> {
-        fn make_argument_vector(call_node : &Nodes, operands : VecDeque<Nodes>) -> VecDeque<Nodes> {
+        fn make_argument_vector(call_node : &Nodes,
+                                operands : VecDeque<Nodes>) -> VecDeque<Nodes> {
             let mut pushable = operands;
 
             if let Nodes::Call(call) = call_node {
@@ -566,6 +576,10 @@ impl CallNode {
         let sub_call = self.callee.call();
         sub_call.is_some() && !self.operands.is_empty() && sub_call.unwrap().is_unary()
     }
+
+    pub fn operand(&self) -> Option<&Nodes> {
+        self.operands.last()
+    }
 }
 
 impl FileNode {
@@ -573,8 +587,8 @@ impl FileNode {
         { Nodes::File(FileNode { filename, location }) }
 }
 
-impl EmptyNode {
-    pub fn new(location : Loc) -> Nodes { Nodes::Empty(EmptyNode { location }) }
+impl NilNode {
+    pub fn new(location : Loc) -> Nodes { Nodes::Nil(NilNode { location }) }
 }
 
 /// Root branch of the AST.

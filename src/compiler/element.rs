@@ -7,7 +7,7 @@ use snailquote::escape;
 use super::block;
 use super::types;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Symbol {
     hash : u64,
     string : String
@@ -74,7 +74,7 @@ impl<'a> fmt::Display for Element<'a> {
             Element::ESymbol(t)  => format!("{: <13} (Sym) ", t.to_string()),
             Element::ECode(t)    => format!("{: <13} (Code)", t.name),
             Element::ESet(t)     => format!("{: <13p} (Set) ", t),
-            Element::ENil        => format!("{: <13} (Nil) ", "nil"),
+            Element::ENil        => format!("{: <13}(Empty) ", "()"),
         };
         write!(f, "{}", s)
     }

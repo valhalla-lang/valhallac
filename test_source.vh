@@ -1,5 +1,16 @@
-a : Nat
-a = 3  -- only one byte when marshalled
+-- TODO: Test overloading with `f`.
+-- TODO: Test casting from subsets of Real, upto Real.
 
-__raw_print (a + 2.5)
-__raw_print "hello"
+f : Real -> Real -> Real
+
+f a b = (1 + 1) * a + b  -- 2a + b
+
+a : Nat
+a = 3
+
+( : ) b Int
+b = 1 - 8  -- -7
+
+c : Real
+c = f (a + 1.0) (b - 0.0)
+

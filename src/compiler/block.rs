@@ -88,7 +88,8 @@ impl<'a> LocalBlock<'a> {
 
         // Don't push constant if:
         //    (already on stack) and (stack depth has stayed the same)
-        if !(index == self.last_const_push_index && self.last_depth_delta == 0) {
+        if !(index == self.last_const_push_index
+        && self.last_depth_delta == 0) {
             self.push_operator(Operators::PUSH_CONST);
             self.push_operand(index);
             self.last_const_push_index = index;
@@ -96,6 +97,7 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn change_stack_depth(&mut self, i : isize) {
+        assert!((self.current_depth as isize) + i >= 0);
         self.last_depth_delta = i;
         self.current_depth = (
             (self.current_depth as isize) + i
@@ -132,12 +134,14 @@ impl<'a> LocalBlock<'a> {
 
     fn ident_assignment(&mut self, left : &'a ast::IdentNode, right : &'a Nodes) {
         if self.types_to_check.is_empty() {
-            issue!(TypeError, &self.filename, err::NO_TOKEN, self.current_line,
-                "You must state what set `{}' is a member of. No type-annotation found.", left.value);
+            issue!(TypeError, &self.filename, err::LINE, self.current_line,
+                "You must state what set `{}' is a member of.
+                 No type-annotation found.", left.value);
         }
         if self.locals_map.contains_key(&left.value) {
-            issue!(CompError, &self.filename, err::NO_TOKEN, self.current_line,
-                "Cannot mutate value of `{}', as it is already bound.", left.value);
+            issue!(CompError, &self.filename, err::LINE, self.current_line,
+                "Cannot mutate value of `{}',
+                 as it is already bound.", left.value);
         }
         let index = self.insert_local(left.value.to_owned());
 
@@ -235,6 +239,9 @@ impl<'a> LocalBlock<'a> {
                 self.push_operator(Operators::PUSH_LOCAL);
                 self.push_operand(self.locals_map[s]);
             },
+            Nodes::Nil(_) => {
+                self.push_const_instr(Element::ENil);
+            },
             Nodes::Num(num_node) => {
                 self.push_const_instr(numerics_to_element(&num_node.value));
             },
@@ -256,7 +263,10 @@ impl<'a> LocalBlock<'a> {
                                 StaticTypes::TInteger => 0x02,
                                 StaticTypes::TReal    => 0x03,
                                 StaticTypes::TString  => 0x04,
-                                _ => panic!("RAW_PRINT cannot display this type.")
+                                _ => issue!(CompError, &self.filename,
+                                        err::LINE, self.current_line,
+                                        "__raw_print cannot display `{}' types.",
+                                        arg.yield_type())
                             };
 
                             self.emit(arg);
@@ -284,19 +294,19 @@ impl<'a> LocalBlock<'a> {
                                 "Real" => 0b0000_0011,
                                 "Int"  => 0b0000_0010,
                                 "Nat"  => 0b0000_0001,
-                                _ => issue!(TypeError, &self.filename, err::NO_TOKEN, self.current_line,
+                                _ => issue!(TypeError, &self.filename, err::LINE, self.current_line,
                                     "Compiler does not know how to cast to `{}'.", cast_name)
                             };
                             let cast_from = match args[0].yield_type() {
                                 ast::StaticTypes::TReal    => 0b0000_0011,
                                 ast::StaticTypes::TInteger => 0b0000_0010,
                                 ast::StaticTypes::TNatural => 0b0000_0001,
-                                _ => issue!(TypeError, &self.filename, err::NO_TOKEN, self.current_line,
+                                _ => issue!(TypeError, &self.filename, err::LINE, self.current_line,
                                     "Compiler does not know how to cast from `{}'.", args[0].yield_type())
                             };
                             self.push_operand(cast_from << 8 | cast_to);
                         } else {
-                            issue!(CompError, &self.filename, err::NO_TOKEN, self.current_line,
+                            issue!(CompError, &self.filename, err::LINE, self.current_line,
                                 "Cast-type provided to `cast' has to be a type-name.")
                         }
                         return;
@@ -318,7 +328,7 @@ impl<'a> LocalBlock<'a> {
                         // If the LHS is not an ident, it is not a
                         //   valid annotation.
                         if args[0].ident().is_none() {
-                            issue!(CompError, &self.filename, err::NO_TOKEN, self.current_line,
+                            issue!(CompError, &self.filename, err::LINE, self.current_line,
                                 "Left of `:` type annotator must be an identifier.");
                         }
                         let left = args[0].ident().unwrap();
@@ -350,6 +360,9 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn yield_last(&mut self) {
+        if self.current_depth == 0usize {
+            self.push_const_instr(Element::ENil);
+        }
         self.push_operator(Operators::YIELD);
     }
 
