@@ -162,7 +162,7 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn function_assign(&mut self, left : &ast::CallNode, right : &'a Nodes) {
-        let mut arguments = left.collect();
+        let mut arguments = left.collect_operands();
         let base_node = arguments.remove(0);
 
         if let Nodes::Ident(ident) = base_node {

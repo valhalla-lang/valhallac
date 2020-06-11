@@ -310,7 +310,7 @@ impl fmt::Display for StaticTypes {
                 StaticTypes::TNatural => "Nat",
                 StaticTypes::TInteger => "Int",
                 StaticTypes::TReal    => "Real",
-                StaticTypes::TString  => "Str",
+                StaticTypes::TString  => "String",
                 StaticTypes::TSymbol  => "Sym",
                 StaticTypes::TFunction(o, r) => {
                     ss = format!("({} \u{1f852} {})", o, r);
@@ -413,10 +413,10 @@ impl Nodes {
                     "Nat"  => StaticTypes::TSet(Box::new(StaticTypes::TNatural)),
                     "Int"  => StaticTypes::TSet(Box::new(StaticTypes::TInteger)),
                     "Real" => StaticTypes::TSet(Box::new(StaticTypes::TReal)),
-                    "Str"  => StaticTypes::TSet(Box::new(StaticTypes::TString)),
-                    "Sym"  => StaticTypes::TSet(Box::new(StaticTypes::TSymbol)),
-                    "Empty"=> StaticTypes::TSet(Box::new(StaticTypes::TNil)),
-                    "Any"  => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
+                    "Str" | "String" => StaticTypes::TSet(Box::new(StaticTypes::TString)),
+                    "Sym" | "Symbol" => StaticTypes::TSet(Box::new(StaticTypes::TSymbol)),
+                    "Empty" => StaticTypes::TSet(Box::new(StaticTypes::TNil)),
+                    "Any" | "Anything" => StaticTypes::TSet(Box::new(StaticTypes::TUnknown)),
                     _ => ident.static_type.to_owned()
                 }
             },
@@ -490,6 +490,17 @@ impl Nodes {
     pub fn  file(&self) -> Option<&FileNode>  { unwrap_enum!(self, Nodes::File)  }
     pub fn   nil(&self) -> Option<&NilNode>   { unwrap_enum!(self, Nodes::Nil)   }
 
+    pub fn is_ident(&self) -> bool { self.ident().is_some() }
+    pub fn is_num(&self)   -> bool { self.num().is_some()   }
+    pub fn is_str(&self)   -> bool { self.str().is_some()   }
+    pub fn is_sym(&self)   -> bool { self.sym().is_some()   }
+    pub fn is_call(&self)  -> bool { self.call().is_some()  }
+    pub fn is_block(&self) -> bool { self.block().is_some() }
+    pub fn is_file(&self)  -> bool { self.file().is_some()  }
+    pub fn is_nil(&self)   -> bool { self.nil().is_some()   }
+
+ 
+
     pub fn is_atomic(&self) -> bool {
         match self {
             Nodes::Ident(_)
@@ -550,8 +561,20 @@ impl CallNode {
         self.return_type = new_type;
     }
 
+    /// The base (bottom-most) callee for a call chain.
+    pub fn base_call(&self) -> Nodes {
+        let mut last_call : &CallNode = self;
+        loop {
+            if let Nodes::Call(call) = &*last_call.callee {
+                last_call = call;
+            } else {
+                return (*last_call.callee).clone();
+            }
+        }
+    }
+
     /// Collect arguments to a call.
-    pub fn collect(&self) -> Vec<Nodes> {
+    pub fn collect_operands(&self) -> Vec<Nodes> {
         fn make_argument_vector(call_node : &Nodes,
                                 operands : VecDeque<Nodes>) -> VecDeque<Nodes> {
             let mut pushable = operands;
@@ -566,6 +589,13 @@ impl CallNode {
         }
         let q = make_argument_vector(&Nodes::Call(self.clone()), VecDeque::new());
         Vec::from(q)
+    }
+
+    /// List of callee and operands, lisp call style list.
+    pub fn collect(&self) -> Vec<Nodes> {
+        let mut list = vec![self.base_call()];
+        list.extend_from_slice(&self.collect_operands());
+        list
     }
 
     pub fn is_unary(&self) -> bool {

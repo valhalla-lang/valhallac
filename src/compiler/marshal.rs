@@ -172,7 +172,8 @@ pub fn marshal_block(blk : &block::LocalBlock) -> Vec<u8> {
 }
 
 pub fn generate_binary(blk : &block::LocalBlock) -> Vec<u8> {
-    let mut bytes = crate::VERSION.to_vec();
+    let (major, minor, tiny) = crate::VERSION;
+    let mut bytes : Vec<u8> = vec![major, minor, tiny];
     bytes.extend(marshal_block(blk));
 
     #[cfg(feature="debug")] {

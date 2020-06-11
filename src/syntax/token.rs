@@ -4,6 +4,14 @@ use super::location;
 use snailquote::escape;
 use unicode_width::UnicodeWidthStr;
 
+
+/// # TODO: Use this.
+/// Way of representing a level of indentation.
+enum Indent {
+    Tab,
+    Spaces(u32),
+}
+
 /// Contains all possible types/classes of
 /// lexiacal tokens.
 #[derive(PartialEq, Clone)]

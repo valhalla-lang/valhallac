@@ -20,7 +20,8 @@ fn is_vh_file(filename : &String) -> bool {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Flags {
-    Verbose, Out
+    Verbose, Out,
+    Version
 }
 
 // TODO: Halt on urecognised options.
@@ -43,13 +44,16 @@ fn collect_flags() -> HashMap<Flags, String> {
             continue;  // Not an option, but an argument.
         }
 
+        let mut singleton = |flag: Flags| map.insert(flag, dummy.clone());
+
         if arg_str.starts_with("--") {
             let name = arg_str.get(2..);
             match name {
-                Some("verbose") => map.insert(Flags::Verbose, dummy.clone()),
+                Some("verbose") => singleton(Flags::Verbose),
+                Some("version") => singleton(Flags::Version),
                 Some("out") => {
                     maybe_argument = Some(Flags::Out);
-                    map.insert(Flags::Out, dummy.clone())
+                    singleton(Flags::Out)
                 },
                 Some(&_) | None => None
             };
@@ -58,10 +62,10 @@ fn collect_flags() -> HashMap<Flags, String> {
             for c in chars {
                 if c == "-" { continue; }
                 if c == "v" {
-                    map.insert(Flags::Verbose, dummy.clone());
+                    singleton(Flags::Verbose);
                 } else if c == "o" {
                     maybe_argument = Some(Flags::Out);
-                    map.insert(Flags::Out, dummy.clone());
+                    singleton(Flags::Out);
                 }
             }
         }
@@ -90,6 +94,14 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     args.next();
 
     let flags = collect_flags();
+
+    if flags.contains_key(&Flags::Version) {
+        let (major, minor, tiny) = valhallac::VERSION;
+        println!("(valhallac): v{}.{}.{}",
+            major, minor, tiny);
+        return Ok(());
+    }
+
     let verbose : bool = flags.contains_key(&Flags::Verbose);
     #[cfg(feature="debug")]
     let verbose = true;

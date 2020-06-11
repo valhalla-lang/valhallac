@@ -84,7 +84,7 @@ impl TypeChecker {
                                         //              (A -> (B -> (C  -> D)))
                                         // ( ((=) ( (((f a)    b)    c) )) d)
 
-                                        let mut operands = assignee.collect();
+                                        let mut operands = assignee.collect_operands();
                                         let mut func_checker = self.clone();
 
                                         let base_node = operands.remove(0);
