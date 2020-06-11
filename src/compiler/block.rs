@@ -1,4 +1,6 @@
+#[cfg(feature="debug")]
 use std::fmt;
+
 use std::collections::{HashMap, VecDeque};
 
 use super::super::err;
@@ -374,6 +376,7 @@ impl<'a> LocalBlock<'a> {
     }
 }
 
+#[cfg(feature="debug")]
 impl<'a> fmt::Display for LocalBlock<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for c in &self.constants {

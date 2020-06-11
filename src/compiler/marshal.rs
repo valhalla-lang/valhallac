@@ -105,8 +105,15 @@ fn marshal_element(element : &Element) -> Vec<u8> {
             num_marshal_append!(s_bytes_len, bytes);
             bytes.extend(s_bytes);
         }
-        _ => panic!("I do not know how to marshal type of `{}'.",
-            element)
+
+        #[allow(unreachable_code)]
+        _ => {
+            #[cfg(feature="debug")] {
+                panic!("I do not know how to marshal type of `{}'.",
+                    element);
+            }
+            panic!("Type cannot be marshalled! This is a (big) bug!")
+        }
     };
     bytes
 }

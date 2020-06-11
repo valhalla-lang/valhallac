@@ -46,6 +46,8 @@ pub fn parse_file(filename : &str) -> ast::Root {
     println!("Stream:\n{}\n", stream.to_string());
 
     let mut tree = parser::parse(stream, filename);
+
+    #[allow(unused_variables)]
     let transformations = transformations![
         TYPE_RESOLUTION,
         CONSTANT_FOLDING

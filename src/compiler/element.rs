@@ -2,6 +2,7 @@ use std::fmt;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+#[cfg(feature="debug")]
 use snailquote::escape;
 
 use super::block;
@@ -64,6 +65,7 @@ impl<'a> Element<'a> {
 }
 
 
+#[cfg(feature="debug")]
 impl<'a> fmt::Display for Element<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {

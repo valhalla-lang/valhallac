@@ -1,3 +1,6 @@
+#![allow(unused_variables)]
+#![allow(dead_code)]
+
 use super::ast;
 use ast::{Nodes, StaticTypes};
 

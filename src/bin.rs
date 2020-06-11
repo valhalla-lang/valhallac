@@ -102,7 +102,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    #[allow(unused_variables)]
     let verbose : bool = flags.contains_key(&Flags::Verbose);
+
+    #[allow(unused_variables)]
     #[cfg(feature="debug")]
     let verbose = true;
 
@@ -158,19 +161,22 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    let elapsed = begin.elapsed();
-    let seconds = elapsed.as_secs_f64();
 
-    not_debug!(verbose, {
-        print!("{}{} ", *INFO, "Took".bold().blue());
-        println!("{}", if seconds < 0.1f64 {
-            format!("{}ms.", begin.elapsed().as_millis())
-        } else {
-            format!("{:0.5}s", seconds)
-        }.white());
+    #[allow(unused_variables)] {
+        let elapsed = begin.elapsed();
+        let seconds = elapsed.as_secs_f64();
 
-        println!();
-    });
+        not_debug!(verbose, {
+            print!("{}{} ", *INFO, "Took".bold().blue());
+            println!("{}", if seconds < 0.1f64 {
+                format!("{}ms.", begin.elapsed().as_millis())
+            } else {
+                format!("{:0.5}s", seconds)
+            }.white());
+
+            println!();
+        });
+    }
 
     Ok(())
 }

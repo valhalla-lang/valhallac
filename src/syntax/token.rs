@@ -1,12 +1,16 @@
-use std::{fmt, collections::VecDeque};
+use std::fmt;
 use super::location;
 
-use snailquote::escape;
-use unicode_width::UnicodeWidthStr;
-
+#[cfg(feature="debug")]
+use {
+    snailquote::escape,
+    unicode_width::UnicodeWidthStr,
+    std::collections::VecDeque
+};
 
 /// # TODO: Use this.
 /// Way of representing a level of indentation.
+#[allow(dead_code)]
 enum Indent {
     Tab,
     Spaces(u32),
@@ -105,6 +109,7 @@ impl Token {
 }
 
 /// String representation of the token.
+#[cfg(feature="debug")]
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut escaped = escape(&self.string.to_string()).into_owned();
@@ -123,10 +128,13 @@ impl fmt::Display for Token {
 
 /// Allows for a custom string representation for the
 /// token-stream as a whole.
+#[cfg(feature="debug")]
 pub trait ShowStream {
     /// String representation of token-stream.
     fn to_string(&self) -> String;
 }
+
+#[cfg(feature="debug")]
 impl ShowStream for VecDeque<Token> {
     fn to_string(&self) -> String {
         let lines : Vec<String> = self.iter().map(Token::to_string).collect();
