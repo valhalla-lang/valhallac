@@ -1,6 +1,14 @@
 //! Crate responsible for parsing and compiling
 //! the generated AST to Brokkr-bytecode for the
 //! Valhalla set theoretic programming language.
+#![warn(clippy::all)]
+#![allow(clippy::needless_return)]
+#![allow(clippy::single_match)]
+#![allow(clippy::new_ret_no_self)]
+
+include!(concat!(env!("OUT_DIR"), "/version.rs"));
+
+pub const VERSION : (u8, u8, u8) = read_version();
 
 /// Error messages.
 #[macro_use]
@@ -18,15 +26,16 @@ pub fn parse(filename : &str) -> syntax::ast::Root {
     syntax::parse_file(filename)
 }
 
-pub fn compile<'a>(root : &'a syntax::ast::Root) -> compiler::block::LocalBlock<'a> {
+pub fn compile(root : &syntax::ast::Root) -> compiler::block::LocalBlock {
     let mut code_block = compiler::block::LocalBlock::new("<main>", &root.filename);
 
     code_block.generate(&root.branches);
+
+    #[cfg(feature="debug")]
     println!("Code Blocks:\n{}", code_block);
     code_block
 }
 
-pub fn binary_gen(block : &compiler::block::LocalBlock) -> String {
-    compiler::marshal::make_binary(block);
-    block.name.to_owned()
+pub fn binary_blob(block : &compiler::block::LocalBlock) -> Vec<u8> {
+    compiler::marshal::generate_binary(block)
 }

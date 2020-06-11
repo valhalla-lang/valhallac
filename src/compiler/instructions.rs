@@ -1,7 +1,7 @@
 use std::fmt;
 
 use enum_primitive_derive::Primitive;
-use num_traits::{FromPrimitive};
+use num_traits::FromPrimitive;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instr {
@@ -10,9 +10,9 @@ pub enum Instr {
 }
 
 impl Instr {
-    pub fn depth_delta(&self, maybe_operand : Option<Instr>) -> isize {
+    pub fn depth_delta(self, maybe_operand : Option<Instr>) -> isize {
         if let Instr::Operand(_) = self
-        { panic!("An operand does not have an impact on stack depth."); }
+        { panic!("An operand does not have an effect on stack depth."); }
 
         if let Some(instr_operand) = maybe_operand {
             if let Instr::Operand(operand) = instr_operand {
@@ -25,29 +25,27 @@ impl Instr {
                     Operators::STORE_LOCAL => -1,
                     Operators::DUP_N       => operand as isize,
                     Operators::CAST        =>  0,
+                    Operators::RAW_PRINT   =>  0,
                     Operators::SET_LINE    =>  0,
                     _ => panic!("This type of opcode doesn't take operands.")
                 };
             }}
-        } else {
-            if let Instr::Operator(code) = self {
-                match code {
-                    40..=56 => return -1,
-                    _ => ()
-                }
-                return match Operators::from_u8(code.to_owned()).unwrap() {
-                    Operators::POP    => -1,
-                    Operators::DUP    =>  1,
-                    Operators::SWAP   =>  0,
-                    Operators::CALL_1 => -1,
-                    Operators::CHECK_TYPE => -2,
-                    Operators::MAKE_FUNC  => -1,
-                    Operators::YIELD      => -1,
-                    Operators::RAW_PRINT  =>  0,
-                    Operators::NOP => 0,
-                    _ => panic!("This opcode must take an operand.")
-                };
+        } else if let Instr::Operator(code) = self {
+            match code {
+                40..=56 => return -1,
+                _ => ()
             }
+            return match Operators::from_u8(code.to_owned()).unwrap() {
+                Operators::POP    => -1,
+                Operators::DUP    =>  1,
+                Operators::SWAP   =>  0,
+                Operators::CALL_1 => -1,
+                Operators::CHECK_TYPE => -2,
+                Operators::MAKE_FUNC  => -1,
+                Operators::YIELD      => -1,
+                Operators::NOP => 0,
+                _ => panic!("This opcode must take an operand.")
+            };
         }
         panic!("Uncovered opcode.")
     }
@@ -59,7 +57,7 @@ impl fmt::Display for Instr {
             Instr::Operand(n) => format!("{: >4} (0x{:04x})\n", n, n),
             Instr::Operator(n) => {
                 let op_str = &Operators::from_u8(*n).unwrap().to_string();
-                if op_str.ends_with("\n") {
+                if op_str.ends_with('\n') {
                     format!("(0x{:02x}):{}", n, op_str)
                 } else {
                     format!("(0x{:02x}):{: <16}", n, op_str)
@@ -74,7 +72,8 @@ impl fmt::Display for Instr {
 #[allow(non_camel_case_types)]
 #[derive(Primitive, Clone, Copy)]
 pub enum Operators {
-    HALT        = 0,   // TAKES 1 OPERAND(s)
+    EOI         = 0,   // TAKES 0 OPERAND(s) (Not a proper operator)
+
     PUSH_CONST  = 1,   // TAKES 1 OPERAND(s)
     PUSH_LOCAL  = 2,   // TAKES 1 OPERAND(s)
     PUSH_SUPER  = 3,   // TAKES 1 OPERAND(s)
@@ -88,7 +87,7 @@ pub enum Operators {
     CAST        = 11,  // TAKES 2 OPERAND(s) (2 operands, 1 out of 2 bytes for each)
     MAKE_FUNC   = 12,  // TAKES 0 OPERAND(s)
     YIELD       = 13,  // TAKES 0 OPERAND(s)
-    RAW_PRINT   = 14,  // TAKES 0 OPERAND(s)
+    RAW_PRINT   = 14,  // TAKES 1 OPERAND(s)
 
     N_ADD       = 40,  // TAKES 0 OPERAND(s)
     I_ADD       = 41,  // TAKES 0 OPERAND(s)
@@ -108,22 +107,25 @@ pub enum Operators {
     R_DIV       = 55,  // TAKES 0 OPERAND(s)
     U_DIV       = 56,  // TAKES 0 OPERAND(s)
 
+    HALT        = 200, // TAKES 1 OPERAND(s)
+
     // Misc- / Meta-codes
     SET_LINE = 254,  // TAKES 1 OPERAND(s)
     NOP = 255,       // TAKES 0 OPERAND(s)
 }
 
 impl Operators {
-    pub fn takes_operand(&self) -> bool {
+    pub fn takes_operand(self) -> bool {
         match self {
-            Operators::HALT
-            | Operators::PUSH_CONST
-            | Operators::PUSH_LOCAL
-            | Operators::PUSH_SUPER
-            | Operators::STORE_LOCAL
-            | Operators::DUP_N
-            | Operators::CAST
-            | Operators::SET_LINE => true,
+            Self::HALT
+            | Self::PUSH_CONST
+            | Self::PUSH_LOCAL
+            | Self::PUSH_SUPER
+            | Self::STORE_LOCAL
+            | Self::DUP_N
+            | Self::CAST
+            | Self::RAW_PRINT
+            | Self::SET_LINE => true,
             _ => false
         }
     }
@@ -132,6 +134,8 @@ impl Operators {
 impl fmt::Display for Operators {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match &self {
+            Operators::EOI         => "EOI",
+
             Operators::HALT        => "HALT",
             Operators::PUSH_CONST  => "PUSH_CONST",
             Operators::PUSH_LOCAL  => "PUSH_LOCAL",
@@ -146,7 +150,7 @@ impl fmt::Display for Operators {
             Operators::CAST        => "CAST",
             Operators::MAKE_FUNC   => "MAKE_FUNC\n",
             Operators::YIELD       => "YIELD\n",
-            Operators::RAW_PRINT   => "RAW_PRINT\n",
+            Operators::RAW_PRINT   => "RAW_PRINT",
 
             Operators::N_ADD       => "N_ADD\n",
             Operators::I_ADD       => "I_ADD\n",

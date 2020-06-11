@@ -1,3 +1,3 @@
 # Without using the prelude, or importing IO...
 
-_write_stream _STDOUT "Hello, World.\n"
+_write_stream :STDOUT "Hello, World.\n"

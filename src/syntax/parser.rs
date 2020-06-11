@@ -12,6 +12,22 @@ use location::Loc;
 use token::{Token, TokenType};
 use ast::Nodes;
 
+fn location_range(loc_begin : &Loc, loc_end : &Loc) -> Loc {
+    let mut loc_final = loc_end.clone();
+
+    loc_final.lines += loc_end.line - loc_begin.line;
+    loc_final.line = loc_begin.line;
+
+    // TODO: Location should record character count from the
+    // beginning of the file, this way we can give a proper multi line
+    // span length. :)
+    if loc_final.lines == 1 {
+        loc_final.span += loc_end.col - loc_begin.col;
+        loc_final.col = loc_begin.col;
+    }
+
+    loc_final
+}
 
 pub fn parse(stream : VecDeque<Token>, file : &str) -> ast::Root {
     let mut environment = ParseEnvironment::new(stream, file);
@@ -76,6 +92,9 @@ impl<'a> ParseEnvironment<'a> {
         }
     }
 
+    // TODO: Generate call nodes with accurate location data.
+    //  Currently this is only done in `func_apply`.
+
     fn null_den(&mut self, token : &Token) -> Nodes {
         let loc = token.location;
         match token.class {
@@ -117,14 +136,19 @@ impl<'a> ParseEnvironment<'a> {
             TokenType::Str => ast::StrNode::new( &token.string, loc),
             TokenType::Sym => ast::SymNode::new( &token.string, loc),
             TokenType::LParen => {
-                let current = self.stream.get(0);
-                if current.is_none() || current.unwrap().class == TokenType::EOF {
-                    self.expect(TokenType::RParen, current)
-                } else if current.unwrap().class == TokenType::RParen {
-                    self.shift();
-                    return ast::EmptyNode::new(loc);
+                let maybe_current = self.stream.get(0);
+                if let Some(current) = maybe_current {
+                    if current.class == TokenType::RParen {
+                        self.shift();
+                        let mut nil_loc = loc.clone();
+                        nil_loc.span += 1;
+                        return ast::NilNode::new(nil_loc);
+                    } else if current.class == TokenType::EOF {
+                        self.expect(TokenType::RParen, maybe_current);
+                    }
+                } else {
+                    self.expect(TokenType::RParen, None);
                 }
-
 
                 self.ignore_newline = true;
                 self.skip_newlines();
@@ -135,8 +159,9 @@ impl<'a> ParseEnvironment<'a> {
                 self.shift();
                 expr
             }
-            _ => issue!(err::Types::ParseError, self.file, token,
-                    "`{}` has no null-denotation.", token.class)
+            _ => issue!(ParseError, self.file, token,
+                    "`{}` has no null-denotation (cannot be used as a prefix).",
+                    token.class)
         }
     }
 
@@ -176,21 +201,33 @@ impl<'a> ParseEnvironment<'a> {
     }
 
     fn func_apply(&mut self, mut left : Nodes) -> Nodes {
+        // What are `first_loc` & `final_loc` for?
+        //  They update location of function call nodes to span
+        //  a correct number of columns (store first and last column).
+        //  Also, update `lines` to specify how many lines the function
+        //  call spans.
+        let first_loc = left.location();
+
         let mut pushed = false;
-        match left {
-            Nodes::Call(ref mut call) => {
-                if call.operands.is_empty() {
-                    call.operands.push(self.expr(190));
-                    pushed = true;
-                }
-            },
-            _ => ()
-        };
+        if let Nodes::Call(ref mut call) = left {
+            if call.operands.is_empty() {
+                let operand_node = self.expr(190);
+                call.operands.push(operand_node);
+                pushed = true;
+            }
+        }
+
         if pushed { return left; }
-        ast::CallNode::new(left, vec![self.expr(190)], self.location)
+
+        let operand_node = self.expr(190);
+        let last_loc = operand_node.location();
+        let final_loc = location_range(&first_loc, &last_loc);
+
+        ast::CallNode::new(left, vec![operand_node], final_loc)
     }
 
     fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {
+        let left_loc = left.location();
         let first_apply = ast::CallNode::new(
             ast::IdentNode::new(op.name, self.location),
             vec![left],
@@ -198,21 +235,22 @@ impl<'a> ParseEnvironment<'a> {
         if self.stream[0].class == TokenType::RParen {
             return first_apply;
         }
-        let right = self.expr(
-            op.precedence - (if op.is_right() { 1 } else { 0 }));
 
-        ast::CallNode::new(first_apply, vec![right], self.location)
+        let right = self.expr(op.precedence
+            - (if op.is_right() { 1 } else { 0 }));
+
+        let call_loc = location_range(&left_loc, &right.location());
+        ast::CallNode::new(first_apply, vec![right], call_loc)
     }
 
     fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
         if maybe_t.is_none() {
-            issue!(err::Types::ParseError, self.file,
-                self.stream.iter().last().unwrap(),
+            issue!(ParseError, self.file, self.stream.iter().last().unwrap(),
                 "Unexpected end of stream.");
         }
         let t = maybe_t.unwrap();
         if t.class != tt {
-            issue!(err::Types::ParseError, self.file, t,
+            issue!(ParseError, self.file, t,
                 "Unexpected token type: `{}`, expected: `{}`.", t.class, tt);
         }
     }

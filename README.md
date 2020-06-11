@@ -3,8 +3,12 @@
 </p>
 
 # Valhalla Programming Language
+This is the parser and compiler for Valhalla, which excludes the virtual
+machine that the compiled bytecode runs on, which is,
+[Brokkr VM](https://github.com/Demonstrandum/brokkr).
 
 ## IN (HEAVY) DEVELOPMENT
+
 
 What's been done so far on the front-end:
 
@@ -35,12 +39,32 @@ What's been done so far on the front-end:
         come from nested closures (nested closures implement currying).
   - [ ] Optimise functions for tail calls.
   - [ ] Track variable and function types.
-  - [ ] Marshaling, i.e. serialising the bytecode and storing it in a file
+  - [x] Marshaling, i.e. serialising the bytecode and storing it in a file
         for future interpretation and execution by the virtual machine.
   - [ ] ...
 
 The VM, i.e. the backend for the language, is being developed independently
 and will have its own progress and check-list updates.
+
+### Compile & Run
+
+In your shell, in the root of this repository, you may write:
+```console
+cargo run [source-file-to-compile.vh] [-o out-file] [-v]
+```
+
+or, have the compiler print out debug information like token streams, syntax trees, symbol tables, bytecode instructions, &ct., use `--features=debug`:
+
+```console
+cargo run --features=debug [source-file.vh]
+```
+
+For example, you can run.
+```console
+cargo run test_source.vh -v  # (verbose)
+```
+to demonstrate compilation with the included test-file (`test_source.vh`).
+The argument of a source-file to compile is, of course, necessary.
 
 ### Example of what the compiler currently does:
 [current_compiler_test.md](https://github.com/valhalla-lang/valhallac/blob/master/current_compiler_test.md)
@@ -65,7 +89,8 @@ verify proofs and such in and around set theory.
 
 The language is a general purpose, but instead of being totally object-oriented,
 or functional, etc., it's just set theory based.  From what I've
-gathered, it's not a very popular paradigm.
+gathered, it's not a very popular paradigm...  Likely for good reason, but hey,
+it might be interesting.
 
 ### Dependencies
 Yikes...
