@@ -22,10 +22,10 @@ num_to_string n = show n
 
 stdout = IO::STDOUT ()
 -- Same as `puts'/`put'
-println : Showable -> ()
-println s = [| s; "\n" |].map (|> show |> IO::write stdout)
-
--- partially applied composition operator :)
+println : Showable -> [] -- saying [] will throw away the result and give ().
+println s = [| s; "\n" |] |> map stdout.IO::write <> show
+println s = map (s |-> stdout.IO::write (show s)) [| s; "\n" |]
+println s = IO::write stdout <| show s + "\n" -- all equiv.
 
 -- So if we try to print something that's
 -- not showable, it won't accept it.

@@ -6,7 +6,9 @@
 #![allow(clippy::single_match)]
 #![allow(clippy::new_ret_no_self)]
 
-const VERSION : [u8; 3] = [0, 0, 1];
+include!(concat!(env!("OUT_DIR"), "/version.rs"));
+
+pub const VERSION : (u8, u8, u8) = read_version();
 
 /// Error messages.
 #[macro_use]

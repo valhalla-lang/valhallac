@@ -51,12 +51,11 @@ pub fn parse_file(filename : &str) -> ast::Root {
         CONSTANT_FOLDING
     ];
 
-    /* // No Opts
+    // No optimisations in debug.
     #[cfg(feature="debug")]
     let transformations = transformations![
         TYPE_RESOLUTION
     ];
-    */
 
     analysis::replace(&mut tree, transformations);
 
