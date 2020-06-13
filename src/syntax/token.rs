@@ -121,8 +121,9 @@ impl fmt::Display for Token {
             class=self.class, rep=escaped,
             spaces1=" ".repeat(12 - self.class.to_string().width()),
             spaces2=" ".repeat(30 - escaped.width()),
-            l=self.location.line, c=self.location.col,
-            span=self.location.span)
+            l=self.location.location.line.unwrap(),
+            c=self.location.location.line.unwrap(),
+            span=self.location.location.columns.unwrap())
     }
 }
 
