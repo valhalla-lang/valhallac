@@ -180,6 +180,10 @@ impl fmt::Display for Issue {
             }
         }
 
+        let note_ascii = self.note_message.as_ref().map(|some|
+            format!("{} {}",
+                "|\n+-".yellow(), some.bold()));
+
         if let Some(column) = self.site.location.column {
             if opened_file {
                 if multi_line {
@@ -192,8 +196,20 @@ impl fmt::Display for Issue {
                         "^".repeat(columns).yellow().bold(),
                         space=" ".repeat(indent),
                         offset=(column + columns))?;
+                    if let Some(note_fmt) = note_ascii {
+                        let indented = note_fmt
+                            .split("\n")
+                            .map(|l| format!("{space} {line}",
+                                line=l,
+                                space=" ".repeat(indent + column)))
+                            .collect::<Vec<String>>()
+                            .join("\n");
+                        writeln!(f, "{}", indented)?;
+                    }
                 }
             }
+        } else if let Some(note_fmt) = note_ascii {
+            writeln!(f, "{}", note_fmt)?;
         }
 
         Ok(())

@@ -427,6 +427,7 @@ fn resolve_annotation(&mut self, appl_0 : ast::CallNode, appl_1 : ast::CallNode)
                 op_1.site().with_filename(&self.filename),
                 "Left of `:` type annotator must be \
                  an identifier; found `{}'.", op_1.node_type())
+                    .note("Has to be a variable.")
                     .print();
         }
     } else {
