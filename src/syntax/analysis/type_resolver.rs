@@ -9,7 +9,7 @@ use super::type_balancer;
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 
-use crate::err;
+use crate::issue;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SymbolEntry {
@@ -162,10 +162,11 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
             let signatures = table.collect_signatures(&ident.value);
             if signatures.len() > 1 {
                 // TODO: Partial application not considered.
-                issue!(ParseError, &self.filename,
-                    err::LOC, &ident.location,
+                issue!(ParseError,
+                    ident.site.with_filename(&self.filename),
                     "Variable has multiple type signatures. Overloading \
-                    types is only possible with functions.");
+                    types is only possible with functions.")
+                        .print();
             }
             // We can unwrap this because we know it contains exactly
             // one (1) element.
@@ -173,7 +174,8 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
             // Give the identifier it's signature.
             ident.static_type = signature.clone();
         } else { // Variable has not been declared.
-            issue!(ParseError, &self.filename, err::LOC, &ident.location,
+            issue!(ParseError,
+                ident.site.with_filename(&self.filename),
                 "Variable `{}' is used, but has not been declared.",
                 &ident.value);
         }
@@ -190,7 +192,7 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
                 ":" => {
                     self.resolve_annotation(appl_0_clone, appl_1.clone());
                     // FIXME: Should we really replace the annotation with a nil?
-                    // I know it isn't useful anymore, but maybe we should keep it
+                    // I know it isn't useful any more, but maybe we should keep it
                     // and just ignore it when compiling.  Returning nil might
                     // add complexity to the rest of the type checking.
 
@@ -229,7 +231,7 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
         }}
         // Any call should resolve its callee type, and check if it is legal
         // to apply an operand of such a (resolved) type.
-        // This entier call expression must thus also be typed, unrolling
+        // This entire call expression must thus also be typed, unrolling
         // the type from the callee.
         if skip_type_check {
             return node;
@@ -249,9 +251,10 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
             if maybe_op_inner_type.is_none() {
                 // Fatal, we should really never get here,
                 // because we _should_ check for this earlier.
-                issue!(TypeError, &self.filename,
-                       err::LOC, &(*appl_0.callee).location(),
-                       "Function should map from a set, it does not.");
+                issue!(TypeError,
+                    (*appl_0.callee).site().with_filename(&self.filename),
+                    "Function should map from a set, it does not.")
+                        .print();
             }
 
             // Safe to unwrap, we've checked for none.
@@ -264,14 +267,15 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
                 // This should be done on 'Int' cast up to 'Real'
                 // (if a Real was expected, and got an Int), for
                 // example.
-                // We should alos emit a warning (always?) when
+                // We should also emit a warning (always?) when
                 // an implicit cast has taken place.
-                issue!(TypeError, &self.filename,
-                       err::LOC, &appl_0.operands[0].location(),
-                       "Mismatching type in function call.
-                         Expected argument of element \
-                         of `{}', instead got a `{}'.",
-                         op_inner_type, op_0_st);
+                issue!(TypeError,
+                    appl_0.operands[0].site().with_filename(&self.filename),
+                    "Mismatching type in function call.
+                     Expected argument of element \
+                     of `{}', instead got a `{}'.",
+                    op_inner_type, op_0_st)
+                        .print();
             }
             // If so, we can continue to unroll the type and
             // assign it to this expression.
@@ -280,18 +284,19 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
             // a type of element of box_ret_t.
             let return_type = (*box_ret_t).set_inner();
             if return_type.is_none() {
-                // Fatal, see simlar comment above.
-                issue!(TypeError, &self.filename,
-                       err::LOC, &(*appl_0.callee).location(),
-                       "Function should map to a set, it does not.");
+                // Fatal, see similar comment above.
+                issue!(TypeError,
+                    (*appl_0.callee).site().with_filename(&self.filename),
+                    "Function should map to a set, it does not.")
+                        .print();
             }
             appl_0.return_type = return_type.unwrap().clone();
         } else {
-            issue!(TypeError, &self.filename,
-                   err::LOC, &appl_0.callee.location(),
-                   "Function-application / juxtaposition is not \
-                   defined on type of `{}'.",
-                   appl_0_st);
+            issue!(TypeError,
+                appl_0.callee.site().with_filename(&self.filename),
+                "Function-application / juxtaposition is not \
+                defined on type of `{}'.", appl_0_st)
+                    .print();
         }
     }
 
@@ -318,7 +323,7 @@ fn resolve_assignment(&mut self,
 
     let filename = &self.filename.to_owned();
     let lhs = &appl_1.operands[0];
-    // Handle variable (identifier) assignemnt:
+    // Handle variable (identifier) assignment:
     if let Nodes::Ident(ident_op_1) = lhs {
         // Recursively resolve RHS of assignment.
         appl_0.operands[0] = self.resolve_branch(&appl_0.operands[0]);
@@ -344,19 +349,20 @@ fn resolve_assignment(&mut self,
             if entries.len() == 1 { // Not overloaded.
                 let ref mut entry = entries[0];
                 // Check entry matches type of RHS
-                // of assigment.
+                // of assignment.
 
                 // TODO: Check if types can be coerced.
                 let rhs_type = appl_0.operands[0].yield_type();
                 if rhs_type != entry.signature {
                     // TODO: Can cast? if so, do
                     // and don't throw an error.
-                    issue!(TypeError, filename,
-                           err::LOC, &appl_0.operands[0].location(),
-                           "Signature does not match \
-                            right-hand-side of assignemnt.
-                            Expected `{}', got `{}'.",
-                           entry.signature, rhs_type);
+                    issue!(TypeError,
+                        appl_0.operands[0].site().with_filename(filename),
+                        "Signature does not match \
+                         right-hand-side of assignment.
+                         Expected `{}', got `{}'.",
+                        entry.signature, rhs_type)
+                            .print();
                 }
                 // Otherwise, all is fine,
                 // and we can update whether it has
@@ -375,23 +381,26 @@ fn resolve_assignment(&mut self,
         let base_call = call_op_1.base_call();
         if !base_call.is_ident() {
             // Fatal, we must define the call on some sort of ident.
-            issue!(ParseError, &self.filename,
-                   err::LOC, &base_call.location(),
-                   "You have to assign to a call on an identifer,
-                    this identifier is the function you are defining.
-                    Expected an `identifier', found `{}'!",
-                   base_call.node_type());
+            issue!(ParseError,
+                base_call.site().with_filename(&self.filename),
+                "You have to assign to a call on an identifier,
+                 this identifier is the function you are defining.
+                 Expected an `identifier', found `{}'!",
+                base_call.node_type())
+                    .print();
         }
         // We've checked, and we may unwrap it.
         let base_call = base_call.ident().unwrap();
         // TODO Continue, collect the arguments too!!!
     } else {
-        // TODO: Assigment to functions.
+        // TODO: Assignment to functions.
         // TODO: Pattern matching etc.
+
         issue!(ParseError,
-               &self.filename, err::LOC, &appl_1.operands[0].location(),
-               "Cannot assign to `{}' structure.",
-               appl_1.operands[0].node_type());
+            appl_1.operands[0].site().with_filename(&self.filename),
+            "Cannot assign to `{}' structure.",
+            appl_1.operands[0].node_type())
+                .print();
     }
 
     return appl_0;
@@ -407,21 +416,24 @@ fn resolve_annotation(&mut self, appl_0 : ast::CallNode, appl_1 : ast::CallNode)
                 self.current_table().push(
                     &op_id_1.value, *signature, false);
             } else {
-                issue!(TypeError, &self.filename, err::LOC, &op_0.location(),
-                       "Right of type annotation must be a set. \
-                        Instead got `{}`.", set_signature);
+                issue!(TypeError,
+                    op_0.site().with_filename(&self.filename),
+                    "Right of type annotation must be a set; \
+                     instead got type of `{}'.", set_signature)
+                        .print();
             }
         } else {
-            issue!(ParseError, &self.filename,
-                err::LOC, &op_1.location(),
+            issue!(ParseError,
+                op_1.site().with_filename(&self.filename),
                 "Left of `:` type annotator must be \
-                    an identifier; found `{}'.", op_1.node_type());
+                 an identifier; found `{}'.", op_1.node_type())
+                    .print();
         }
     } else {
         issue!(ParseError,
-            &self.filename, err::LOC,
-            &appl_1.location,
-            "No expression found left of `:`.");
+            appl_1.site.with_filename(&self.filename),
+            "No expression found left of `:`.")
+                .print();
     }
 }
 }

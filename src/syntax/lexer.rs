@@ -1,9 +1,7 @@
-use crate::err;
+use crate::{issue, site::Site};
 
 use super::token;
 use token::{Token, TokenType};
-
-use super::location;
 
 use std::collections::VecDeque;
 use lazy_static::lazy_static;
@@ -39,7 +37,7 @@ impl RegexExt for Regex {
     }
 }
 
-/// All chars that may constitue an ident.
+/// All chars that may constitute an ident.
 const IDENT_CHARS : &str = r"\p{L}\?!'\-_";
 
 // TODO: Parse symbols with spaces? `:"..."` syntax.
@@ -55,12 +53,14 @@ macro_rules! try_match {
      $reg:expr, $token_type:expr,
      $current_char_ptr:expr, $line:expr, $col:expr) => {
         if let Some(matched) = $reg.first_match($partial) {
-            let span = matched.width() as u32;
+            let width = matched.width();
+            let bytes = matched.len();
             $stream.push_back(Token::new(
                 $token_type, &matched,
-                location::new($line, $col, span)));
-            $current_char_ptr += matched.len();
-            $col += span;
+                Site::single_line($line, $col,
+                    width, bytes, $current_char_ptr)));
+            $current_char_ptr += bytes;
+            $col += width;
             $stream.back()
         } else {
             None
@@ -77,8 +77,8 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
     let string_size = string.bytes().count();
 
     let mut partial : &str;
-    let mut line = 1;
-    let mut col  = 1;
+    let mut line : usize = 1;
+    let mut col  : usize = 1;
 
     // Step through
     while current_char_ptr < string_size {
@@ -90,7 +90,6 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
             continue;
         }
 
-
         let two_chars = partial.get(0..2).unwrap_or("\0\0");
 
         // Consume EON comment:
@@ -98,7 +97,9 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
             let old_char_ptr = current_char_ptr;
             current_char_ptr += if two_chars == "--" { 2 } else { 1 };
             loop {
-                let current_char = string.bytes().nth(current_char_ptr).unwrap_or(b'\0');
+                let current_char = string.bytes()
+                    .nth(current_char_ptr)
+                    .unwrap_or(b'\0');
                 if current_char == b'\n' || current_char == b'\0' {
                     break;
                 }
@@ -106,7 +107,7 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
             }
             col += string.get(old_char_ptr..current_char_ptr)
                 .expect("Comment ended or started not on char boundary.")
-                .width() as u32;
+                .width();
 
             continue;
         }
@@ -119,7 +120,8 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
         if let Some(tt) = vec_brack {
             token_stream.push_back(Token::new(
                 tt, two_chars,
-                location::new(line, col, 2)));
+                Site::single_line(line, col,
+                    2, 2, current_char_ptr)));
             col += 2;
             current_char_ptr += 2;
             continue;
@@ -128,14 +130,15 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
         if two_chars == ": " {
             token_stream.push_back(Token::new(
                 TokenType::Op, ":",
-                location::new(line, col, 1)));
+                Site::single_line(line, col,
+                    1, 2, current_char_ptr)));
             col += 2;
             current_char_ptr += 2;
             continue;
         }
 
         let first_char = partial.chars().nth(0)
-            .expect("Empty program was trying to be lexed."); // This should't happen.
+            .expect("Empty program was trying to be lexed."); // This shouldn't happen.
 
         let single_char_token = match first_char {
             '(' => Some(TokenType::LParen),
@@ -151,7 +154,8 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
         if let Some(tt) = single_char_token {
             token_stream.push_back(Token::new(
                 tt, &first_char.to_string(),
-                location::new(line, col, 1)));
+                Site::single_line(line, col,
+                    1, 1, current_char_ptr)));
             if first_char == '\n' {
                 line += 1;
                 col = 1;
@@ -168,7 +172,8 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
             let mut eos = false;
             let mut i = 1;
             let old_col = col;
-            while !eos {  // Spaghet
+            let old_char_ptr = current_char_ptr;
+            while !eos {  // Spaghetti
                 if let Some(character) = partial.chars().nth(i) {
                     if character == '"' {
                         current_char_ptr += 1;
@@ -184,11 +189,15 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
                                 'b' => String::from("\x08"),
                                 '0' => String::from("\0"),
                                 'x' => {
-                                    if let Some(code) = partial.get((current_char_ptr + 2)..(current_char_ptr + 4)) {
+                                    if let Some(code) = partial
+                                        .get((current_char_ptr + 2)
+                                            ..(current_char_ptr + 4)) {
                                         i += 2;
                                         col += 2;
                                         current_char_ptr += 2;
-                                        (u8::from_str_radix(code, 16).expect("Malformed hex.") as char).to_string()
+                                        (u8::from_str_radix(code, 16)
+                                            .expect("Malformed hex.") as char)
+                                            .to_string()
                                     } else { String::new() }
                                 }
                                 c => c.to_string()
@@ -200,18 +209,18 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
                             continue;
                         } else {
                             eos = true;
-                            // Error: Unexpected EOS!
+                            // TODO Error: Unexpected EOS!
                         }
                     } else {
                         contents.push(character);
                         i += 1;
-                        col += character.width().unwrap_or(2) as u32;
+                        col += character.width().unwrap_or(2);
                         current_char_ptr += character.len_utf8();
                         continue;
                     }
                 } else {
                     eos = true;
-                    // Error: Unexpected EOS!
+                    // TODO Error: Unexpected EOS!
                 }
                 i += 1;
                 current_char_ptr += 1;
@@ -219,7 +228,10 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
             }
             token_stream.push_back(Token::new(
                 TokenType::Str, &contents,
-                location::new(line, old_col, col - old_col)));
+                Site::single_line(line, old_col,
+                    col - old_col,
+                    current_char_ptr - old_char_ptr,
+                    old_char_ptr)));
             continue;
         }
 
@@ -243,9 +255,10 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
             current_char_ptr, line, col);
         if let Some(token) = matched {
             if two_chars == ":)" {
-                warn!(LexWarn, filename, token,
+                issue!(LexWarn, token.location.with_filename(filename),
                     "Nice smiley-face, but are you sure you wanted to \
-                     use a `Symbol' here?  Use `:\")\"` to be more explicit.");
+                     use a `Symbol' here?  Use `:\")\"` to be more explicit.")
+                     .print();
             }
             continue;
         }
@@ -254,9 +267,9 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
         if partial.is_char_boundary(0) { col += 1 }
     }
 
-    let mut last_location = location::new(0, 0, 1);
+    let mut last_location = Site::new();
     if let  Some(last_token) = token_stream.back() {
-        last_location = last_token.location;
+        last_location = last_token.location.to_owned();
     }
 
     token_stream.push_back(Token::new(

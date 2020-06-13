@@ -11,11 +11,11 @@ fn create_cast(node : &Nodes, cast : &ast::StaticTypes) -> Nodes {
 
     let mut cast_node = ast::CallNode::new(
         ast::CallNode::new(
-            ast::IdentNode::new("cast", node.location()),
+            ast::IdentNode::new("cast", node.site()),
             vec![node.clone()],
-            node.location()),
-        vec![ast::SymNode::new(to_type, node.location())],
-        node.location());
+            node.site()),
+        vec![ast::SymNode::new(to_type, node.site())],
+        node.site());
     if let Nodes::Call(ref mut call) = cast_node {
         call.set_return_type(cast.clone())
     }
@@ -61,15 +61,15 @@ fn balance_types(node : &Nodes) -> Nodes {
                             ast::CallNode::new(
                                 *call.callee.clone(),
                                 vec![create_cast(&right, &cast_to)],
-                                call.callee.location())
+                                call.callee.site())
                         } else {
                             ast::CallNode::new(
                                 ast::CallNode::new(
                                     *call.callee.call().unwrap().callee.clone(),
                                     vec![create_cast(&left, &cast_to)],
-                                    call.callee.location()),
+                                    call.callee.site()),
                                 vec![right],
-                                call.location)
+                                call.site.clone())
                         };
                         if let Nodes::Call(ref mut c) = new_call {
                             c.set_return_type(cast_to);
@@ -96,7 +96,7 @@ fn balance_types(node : &Nodes) -> Nodes {
                 let mut new_call = ast::CallNode::new(
                     *call.callee.clone(),
                     vec![create_cast(&right, &left_yield)],
-                    call.callee.location());
+                    call.callee.site());
                 if let Nodes::Call(ref mut c) = new_call {
                     c.set_return_type(left_yield);
                 }
@@ -106,7 +106,7 @@ fn balance_types(node : &Nodes) -> Nodes {
         let mut non_bi = ast::CallNode::new(
             balance_types(&*call.callee),
             vec![balance_types(&call.operands[0])],
-            call.callee.location());
+            call.callee.site());
         if let Nodes::Call(ref mut c) = non_bi {
             c.set_return_type(call.return_type.clone());
         }

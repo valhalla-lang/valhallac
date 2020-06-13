@@ -1,5 +1,5 @@
 use std::fmt;
-use super::location;
+use crate::site::Site;
 
 #[cfg(feature="debug")]
 use {
@@ -26,7 +26,7 @@ pub enum TokenType {
     Num,
     /// Any operators, simular to idents but are lexed differently.
     Op,
-    /// Symbols, they are like elements of enums, they begin with a colon.
+    /// Symbols, they are like elements of C enums, they begin with a colon.
     Sym,
     /// Strings, enclosed by double quotes ("...").
     Str,
@@ -76,7 +76,7 @@ impl fmt::Display for TokenType {
     }
 }
 
-/// Token structure, an individual lexiacal token,
+/// Token structure, an individual lexical token,
 /// represented by its type/class, what it was written as
 /// in the program, and its location in the code.
 #[derive(Clone)]
@@ -86,13 +86,13 @@ pub struct Token {
     /// What string the token matched with.
     pub string : String,
     /// Where the token is in the code.
-    pub location : location::Loc,
+    pub location : Site,
 }
 
 impl Token {
     /// Constructs a new Token structure.
-    pub fn new(class : TokenType, string : &str, loc : location::Loc) -> Token {
-        Token { class, string: String::from(string), location: loc }
+    pub fn new(class : TokenType, string : &str, site : Site) -> Token {
+        Token { class, string: String::from(string), location: site }
     }
 
     /// Checks if the token represents an atomic datum.

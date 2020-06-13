@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::err;
+use crate::issue;
 
 use super::ast;
 use ast::Nodes;
@@ -23,7 +23,7 @@ impl TypeChecker {
 
     pub fn type_branch(&mut self, node : &Nodes) -> Nodes {
         let mut clone = node.to_owned();
-        self.source_line = clone.location().line as usize;
+        self.source_line = clone.location().line.unwrap();
         match clone {
             Nodes::File(f) => self.source_file = f.filename,
             Nodes::Ident(ref mut i) => {
@@ -59,12 +59,12 @@ impl TypeChecker {
                                 } else {
                                     // Error: We need the left to be an ident.
                                     issue!(ParseError,
-                                        self.source_file.as_str(),
-                                        err::LINE, self.source_line,
+                                        callee.operands[0].site().with_filename(&self.source_file),
                                         "The left side of the member-of operator (`:`), must be an identifier.
                                          You supplied a type of `{}'.
                                          Only variable names can be declared as being members of sets.",
-                                        callee.operands[0].node_type());
+                                        callee.operands[0].node_type())
+                                            .print();
                                 }
                             },
                             "=" => {
@@ -90,10 +90,11 @@ impl TypeChecker {
                                         let base_node = operands.remove(0);
                                         if base_node.ident().is_none() {
                                             issue!(ParseError,
-                                                &self.source_file, err::LINE, self.source_line,
+                                                base_node.site().with_filename(&self.source_file),
                                                 "Function definitions must have the defining function's base caller
                                                 be an identifier! You're trying to define a function that has
-                                                `{}' as base caller...", base_node.node_type());
+                                                `{}' as base caller...", base_node.node_type())
+                                                    .print();
                                         }
 
                                         let maybe_type = self.ident_map.get(&base_node.ident().unwrap().value);
@@ -103,11 +104,11 @@ impl TypeChecker {
                                                 println!("{:?}", self.ident_map);
                                             }
                                             issue!(TypeError,
-                                                self.source_file.as_str(),
-                                                err::LINE, self.source_line,
+                                                base_node.site().with_filename(&self.source_file),
                                                 "Cannot find type annotation for the
                                                  function definition of `{}'.",
-                                                 base_node.ident().unwrap().value);
+                                                 base_node.ident().unwrap().value)
+                                                    .print();
                                         }
                                         let mut t = maybe_type.unwrap().clone();
 

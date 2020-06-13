@@ -1,5 +1,4 @@
 use ::valhallac;
-//use valhallac::err;
 
 use std::env;
 use std::{fs::File, path::Path};
@@ -24,7 +23,7 @@ enum Flags {
     Version
 }
 
-// TODO: Halt on urecognised options.
+// TODO: Halt on unrecognised options.
 /// Collect flags and options passed to the executable.
 fn collect_flags() -> HashMap<Flags, String> {
     let mut map = HashMap::new();
@@ -90,6 +89,8 @@ lazy_static! {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+    valhallac::set_panic();
+
     let mut args = env::args();
     args.next();
 
@@ -120,12 +121,19 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for file in files {
         not_debug!(verbose, {
-                println!("\n{}{} `{}'...", *INFO,
+                println!("{}{} `{}'...", *INFO,
                      "Parsing".bold().blue(),
                      file.underline().white());
         });
         // Parse source into tree.
         let root = valhallac::parse(&file);
+        unsafe {
+            if !valhallac::PANIC_MESSAGE.is_empty() {
+                // An error in parsing, halt compilation.
+                panic!("Parse error, will not compile bad tree.");
+            }
+        }
+
         // Then compile into series of instructions,
         //   stored as a code block.
         not_debug!(verbose, {

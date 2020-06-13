@@ -1,8 +1,7 @@
 use std::{fmt, ops};
 use std::collections::VecDeque;
 
-use super::location;
-use location::Loc;
+use crate::site::{Site, Location};
 
 /// Identifiers, node representing a name that
 /// will represent a value stored.
@@ -15,7 +14,7 @@ pub struct IdentNode {
     pub static_type : StaticTypes,
 
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 /// Different types of possible number types in the language.
@@ -198,7 +197,7 @@ pub struct NumNode {
     pub value : Numerics,
 
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 
@@ -209,7 +208,7 @@ pub struct StrNode {
     pub value : String,
 
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 /// Symbol Node.
@@ -220,7 +219,7 @@ pub struct SymNode {
     pub value : String,
 
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 /// Call Node has a pointer to the callee node
@@ -236,7 +235,7 @@ pub struct CallNode {
     pub return_type : StaticTypes,
 
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 /// Represents a block of code / compound statements
@@ -247,20 +246,20 @@ pub struct BlockNode {
     pub statements : Vec<Nodes>,
 
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 #[derive(Clone)]
 pub struct FileNode {
     pub filename : String,
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 #[derive(Clone)]
 pub struct NilNode {
     /// Source location.
-    pub location : Loc,
+    pub site : Site,
 }
 
 /// All base types, determined at compile time.
@@ -328,7 +327,7 @@ impl fmt::Display for StaticTypes {
                 ss.as_str()
             },
             StaticTypes::TNil     => "nothing",
-            StaticTypes::TUnknown => "anything",
+            StaticTypes::TUnknown => "unknown",
         };
         write!(f, "{}", s)
     }
@@ -383,18 +382,23 @@ macro_rules! unwrap_enum {
 
 
 impl Nodes {
-    pub fn location(&self) -> Loc {
+    pub fn site(&self) -> Site {
         match self {
-            Nodes::Ident(n) => n.location,
-            Nodes::Call(n)  => n.location,
-            Nodes::Num(n)   => n.location,
-            Nodes::Str(n)   => n.location,
-            Nodes::Sym(n)   => n.location,
-            Nodes::Nil(n) => n.location,
-            Nodes::Block(n) => n.location,
-            Nodes::File(n)  => n.location,
+            Nodes::Ident(n) => n.site.to_owned(),
+            Nodes::Call(n)  => n.site.to_owned(),
+            Nodes::Num(n)   => n.site.to_owned(),
+            Nodes::Str(n)   => n.site.to_owned(),
+            Nodes::Sym(n)   => n.site.to_owned(),
+            Nodes::Nil(n)   => n.site.to_owned(),
+            Nodes::Block(n) => n.site.to_owned(),
+            Nodes::File(n)  => n.site.to_owned(),
         }
     }
+
+    pub fn location(&self) -> Location {
+        self.site().location
+    }
+
     /// Function that returns the statically known type
     /// of any syntactic node generated.
     pub fn yield_type(&self) -> StaticTypes {
@@ -466,7 +470,7 @@ impl Nodes {
             Nodes::Str(_)   => "string literal",
             Nodes::Sym(_)   => "symbol",
             Nodes::Nil(_)   => "nothing",
-            Nodes::Call(_)  => "function call",
+            Nodes::Call(_)  => "application",
             Nodes::Block(_) => "code block",
             _ => "ungrammatical meta node"
         }
@@ -499,7 +503,7 @@ impl Nodes {
     pub fn is_file(&self)  -> bool { self.file().is_some()  }
     pub fn is_nil(&self)   -> bool { self.nil().is_some()   }
 
- 
+
 
     pub fn is_atomic(&self) -> bool {
         match self {
@@ -521,39 +525,39 @@ impl Nodes {
 }
 
 impl IdentNode {
-    pub fn new(value : &str, location : Loc) -> Nodes {
+    pub fn new(value : &str, site : Site) -> Nodes {
         Nodes::Ident(IdentNode {
             value: value.to_string(),
             static_type: StaticTypes::TUnknown,
-            location
+            site
         })
     }
 }
 
 impl NumNode {
-    pub fn new<Num : ToNumeric>(number : Num, location : Loc) -> Nodes {
+    pub fn new<Num : ToNumeric>(number : Num, site : Site) -> Nodes {
         let value = number.to_numeric();
-        Nodes::Num(NumNode { value, location })
+        Nodes::Num(NumNode { value, site })
     }
 }
 
 impl StrNode {
-    pub fn new(value : &str, location : Loc) -> Nodes
-        { Nodes::Str(StrNode { value: value.to_string(), location }) }
+    pub fn new(value : &str, site : Site) -> Nodes
+        { Nodes::Str(StrNode { value: value.to_string(), site }) }
 }
 
 impl SymNode {
-    pub fn new(value : &str, location : Loc) -> Nodes
-        { Nodes::Sym(SymNode { value: value[1..].to_string(), location }) }
+    pub fn new(value : &str, site : Site) -> Nodes
+        { Nodes::Sym(SymNode { value: value[1..].to_string(), site }) }
 }
 
 impl CallNode {
-    pub fn new(callee : Nodes, operands : Vec<Nodes>, location : Loc) -> Nodes {
+    pub fn new(callee : Nodes, operands : Vec<Nodes>, site : Site) -> Nodes {
         Nodes::Call(CallNode {
             callee: Box::new(callee),
             operands,
             return_type: StaticTypes::TUnknown,
-            location
+            site
         })
     }
 
@@ -613,12 +617,12 @@ impl CallNode {
 }
 
 impl FileNode {
-    pub fn new(filename : String, location : Loc) -> Nodes
-        { Nodes::File(FileNode { filename, location }) }
+    pub fn new(filename : String, site : Site) -> Nodes
+        { Nodes::File(FileNode { filename, site }) }
 }
 
 impl NilNode {
-    pub fn new(location : Loc) -> Nodes { Nodes::Nil(NilNode { location }) }
+    pub fn new(site : Site) -> Nodes { Nodes::Nil(NilNode { site }) }
 }
 
 /// Root branch of the AST.

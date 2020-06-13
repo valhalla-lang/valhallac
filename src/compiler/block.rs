@@ -3,9 +3,9 @@ use std::fmt;
 
 use std::collections::{HashMap, VecDeque};
 
-use super::super::err;
+use crate::issue;
 
-use super::super::syntax;
+use crate::syntax;
 use syntax::ast;
 use syntax::ast::{Nodes, StaticTypes};
 
@@ -136,14 +136,16 @@ impl<'a> LocalBlock<'a> {
 
     fn ident_assignment(&mut self, left : &'a ast::IdentNode, right : &'a Nodes) {
         if self.types_to_check.is_empty() {
-            issue!(TypeError, &self.filename, err::LINE, self.current_line,
+            fatal!(TypeError, left.site.with_filename(&self.filename),
                 "You must state what set `{}' is a member of.
-                 No type-annotation found.", left.value);
+                 No type-annotation found.", left.value)
+                    .print();
         }
         if self.locals_map.contains_key(&left.value) {
-            issue!(CompError, &self.filename, err::LINE, self.current_line,
+            fatal!(CompError, left.site.with_filename(&self.filename),
                 "Cannot mutate value of `{}',
-                 as it is already bound.", left.value);
+                 as it is already bound.", left.value)
+                    .print();
         }
         let index = self.insert_local(left.value.to_owned());
 
@@ -214,7 +216,7 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn emit(&mut self, node : &'a Nodes) {
-        let current_line = node.location().line as usize;
+        let current_line = node.site().location.line.unwrap();
         if self.current_line != current_line {
             let len = self.instructions.len();
             if len > 1
@@ -265,10 +267,10 @@ impl<'a> LocalBlock<'a> {
                                 StaticTypes::TInteger => 0x02,
                                 StaticTypes::TReal    => 0x03,
                                 StaticTypes::TString  => 0x04,
-                                _ => issue!(CompError, &self.filename,
-                                        err::LINE, self.current_line,
+                                _ => fatal!(CompError, arg.site().with_filename(&self.filename),
                                         "__raw_print cannot display `{}' types.",
                                         arg.yield_type())
+                                            .crash_and_burn()
                             };
 
                             self.emit(arg);
@@ -296,20 +298,28 @@ impl<'a> LocalBlock<'a> {
                                 "Real" => 0b0000_0011,
                                 "Int"  => 0b0000_0010,
                                 "Nat"  => 0b0000_0001,
-                                _ => issue!(TypeError, &self.filename, err::LINE, self.current_line,
-                                    "Compiler does not know how to cast to `{}'.", cast_name)
+                                _ => fatal!(TypeError,
+                                    args[1].site().with_filename(&self.filename),
+                                    "Compiler does not know how to cast to `{}'.",
+                                    cast_name)
+                                        .crash_and_burn()
                             };
                             let cast_from = match args[0].yield_type() {
                                 ast::StaticTypes::TReal    => 0b0000_0011,
                                 ast::StaticTypes::TInteger => 0b0000_0010,
                                 ast::StaticTypes::TNatural => 0b0000_0001,
-                                _ => issue!(TypeError, &self.filename, err::LINE, self.current_line,
-                                    "Compiler does not know how to cast from `{}'.", args[0].yield_type())
+                                _ => fatal!(TypeError,
+                                    args[0].site().with_filename(&self.filename),
+                                    "Compiler does not know how to cast from `{}'.",
+                                    args[0].yield_type())
+                                        .crash_and_burn()
                             };
                             self.push_operand(cast_from << 8 | cast_to);
                         } else {
-                            issue!(CompError, &self.filename, err::LINE, self.current_line,
+                            issue!(CompError,
+                                args[1].site().with_filename(&self.filename),
                                 "Cast-type provided to `cast' has to be a type-name.")
+                                    .print();
                         }
                         return;
                     }
@@ -330,8 +340,10 @@ impl<'a> LocalBlock<'a> {
                         // If the LHS is not an ident, it is not a
                         //   valid annotation.
                         if args[0].ident().is_none() {
-                            issue!(CompError, &self.filename, err::LINE, self.current_line,
-                                "Left of `:` type annotator must be an identifier.");
+                            issue!(CompError,
+                                args[0].site().with_filename(&self.filename),
+                                "Left of `:` type annotator must be an identifier.")
+                                    .print();
                         }
                         let left = args[0].ident().unwrap();
 

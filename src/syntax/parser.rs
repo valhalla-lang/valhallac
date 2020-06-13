@@ -1,29 +1,36 @@
 use std::collections::VecDeque;
 
-use super::location;
 use super::token;
 use super::ast;
 use super::operators;
 
-use super::super::err;
+use crate::{issue, site};
+use site::{Site, Location};
 
-use location::Loc;
 
 use token::{Token, TokenType};
 use ast::Nodes;
 
-fn location_range(loc_begin : &Loc, loc_end : &Loc) -> Loc {
+fn location_range(loc_begin : &Location, loc_end : &Location) -> Location {
     let mut loc_final = loc_end.clone();
 
-    loc_final.lines += loc_end.line - loc_begin.line;
-    loc_final.line = loc_begin.line;
-
-    // TODO: Location should record character count from the
-    // beginning of the file, this way we can give a proper multi line
-    // span length. :)
-    if loc_final.lines == 1 {
-        loc_final.span += loc_end.col - loc_begin.col;
-        loc_final.col = loc_begin.col;
+    if let Location {
+        line: Some(ref mut line),
+        lines: Some(ref mut lines),
+        column: Some(ref mut column),
+        columns: Some(ref mut columns),
+        span: Some(ref mut span),
+        byte_offset: Some(ref mut byte_offset),
+        ..
+    } = loc_final {
+        *lines += loc_end.line.unwrap() - loc_begin.line.unwrap();
+        *line = loc_begin.line.unwrap();
+        *span = loc_end.eos().unwrap()
+            - loc_begin.byte_offset.unwrap();
+        *columns = loc_end.column.unwrap() + loc_end.columns.unwrap()
+            - loc_begin.column.unwrap();
+        *column = loc_begin.column.unwrap();
+        *byte_offset = loc_begin.byte_offset.unwrap();
     }
 
     loc_final
@@ -42,7 +49,7 @@ struct ParseEnvironment<'a> {
     pub file : &'a str,
 
     ignore_newline : bool,
-    location: Loc,
+    site : Site,
     eof_token : Token
 }
 
@@ -56,12 +63,13 @@ impl<'a> ParseEnvironment<'a> {
             file,
 
             ignore_newline: false,
-            location: location::new(1, 1, 1),
+            site: Site::single_line(1, 1, 1, 1, 0),
         }
     }
 
     pub fn start(&mut self) {
-        self.root.branches.push(ast::FileNode::new(self.file.to_owned(), self.location));
+        self.root.branches.push(ast::FileNode::new(
+            self.file.to_owned(), self.site.clone()));
 
         let mut current = self.stream.get(0);
         while current.is_some() && current.unwrap().class != TokenType::EOF {
@@ -82,7 +90,7 @@ impl<'a> ParseEnvironment<'a> {
             self.stream.push_back(self.eof_token.clone());
         }
         let shifted = self.stream.pop_front().unwrap();
-        self.location = shifted.location;
+        self.site = shifted.location.to_owned();
         shifted
     }
 
@@ -96,7 +104,7 @@ impl<'a> ParseEnvironment<'a> {
     //  Currently this is only done in `func_apply`.
 
     fn null_den(&mut self, token : &Token) -> Nodes {
-        let loc = token.location;
+        let loc = token.location.to_owned();
         match token.class {
             TokenType::Op | TokenType::Ident => {
                 let is_op = self.optable.exists(&token.string);
@@ -116,16 +124,16 @@ impl<'a> ParseEnvironment<'a> {
                             if prefix.is_none() {
                                 ast::CallNode::new(
                                     ast::CallNode::new(
-                                        ast::IdentNode::new("flip", loc),
+                                        ast::IdentNode::new("flip", loc.to_owned()),
                                         vec![ast::IdentNode::new(&token.string, loc)],
-                                        self.location),
+                                        self.site.to_owned()),
                                     vec![self.expr(500)],
-                                    self.location)
+                                    self.site.to_owned())
                             } else {
                                 ast::CallNode::new(
                                     ast::IdentNode::new(&token.string, loc),
                                     vec![self.expr(500)],
-                                    self.location)
+                                    self.site.to_owned())
                             }
                         }
                     };
@@ -133,15 +141,26 @@ impl<'a> ParseEnvironment<'a> {
                 ast::IdentNode::new(&token.string, loc)
             },
             TokenType::Num => ast::NumNode::new(&*token.string, loc),
-            TokenType::Str => ast::StrNode::new( &token.string, loc),
-            TokenType::Sym => ast::SymNode::new( &token.string, loc),
+            TokenType::Str => ast::StrNode::new( &token.string,  loc),
+            TokenType::Sym => ast::SymNode::new( &token.string,  loc),
             TokenType::LParen => {
                 let maybe_current = self.stream.get(0);
                 if let Some(current) = maybe_current {
                     if current.class == TokenType::RParen {
                         self.shift();
                         let mut nil_loc = loc.clone();
-                        nil_loc.span += 1;
+
+                        if let Location {
+                            span: Some(ref mut span),
+                            columns: Some(ref mut columns),
+                            ..
+                        } = nil_loc.location {
+                            *span += 1;
+                            *columns += 1;
+                        } else {
+                            panic!("All tokens should have width.");
+                        }
+
                         return ast::NilNode::new(nil_loc);
                     } else if current.class == TokenType::EOF {
                         self.expect(TokenType::RParen, maybe_current);
@@ -159,9 +178,14 @@ impl<'a> ParseEnvironment<'a> {
                 self.shift();
                 expr
             }
-            _ => issue!(ParseError, self.file, token,
-                    "`{}` has no null-denotation (cannot be used as a prefix).",
+            _ => {
+                issue!(ParseError, token.location.with_filename(self.file),
+                    "`{}` has no null-denotation.",
                     token.class)
+                        .note("Cannot be used as a prefix / left-of-expression.")
+                        .print();
+                ast::NilNode::new(loc)
+            }
         }
     }
 
@@ -206,7 +230,7 @@ impl<'a> ParseEnvironment<'a> {
         //  a correct number of columns (store first and last column).
         //  Also, update `lines` to specify how many lines the function
         //  call spans.
-        let first_loc = left.location();
+        let first_site = left.site().clone();
 
         let mut pushed = false;
         if let Nodes::Call(ref mut call) = left {
@@ -220,18 +244,22 @@ impl<'a> ParseEnvironment<'a> {
         if pushed { return left; }
 
         let operand_node = self.expr(190);
-        let last_loc = operand_node.location();
-        let final_loc = location_range(&first_loc, &last_loc);
+        let last_site = operand_node.site();
+        let mut final_site = first_site.clone();
+        final_site.location = location_range(
+            &first_site.location,
+              &last_site.location);
 
-        ast::CallNode::new(left, vec![operand_node], final_loc)
+        ast::CallNode::new(left, vec![operand_node], final_site)
     }
 
     fn left_den(&mut self, left : Nodes, op : operators::Operator) -> Nodes {
-        let left_loc = left.location();
+        let left_site = left.site();
         let first_apply = ast::CallNode::new(
-            ast::IdentNode::new(op.name, self.location),
+            ast::IdentNode::new(op.name, self.site.to_owned()),
             vec![left],
-            self.location);
+            self.site.to_owned());
+
         if self.stream[0].class == TokenType::RParen {
             return first_apply;
         }
@@ -239,19 +267,28 @@ impl<'a> ParseEnvironment<'a> {
         let right = self.expr(op.precedence
             - (if op.is_right() { 1 } else { 0 }));
 
-        let call_loc = location_range(&left_loc, &right.location());
-        ast::CallNode::new(first_apply, vec![right], call_loc)
+        let mut call_site = left_site.clone();
+        call_site.location = location_range(
+            &left_site.location,
+            &right.location());
+        ast::CallNode::new(first_apply, vec![right], call_site)
     }
 
     fn expect(&self, tt : TokenType, maybe_t : Option<&Token>) {
         if maybe_t.is_none() {
-            issue!(ParseError, self.file, self.stream.iter().last().unwrap(),
-                "Unexpected end of stream.");
+            fatal!(ParseError,
+                self.stream.iter()
+                    .last().unwrap()
+                    .location
+                    .with_filename(self.file),
+                "Unexpected end of stream.")
+                    .print();
         }
         let t = maybe_t.unwrap();
         if t.class != tt {
-            issue!(ParseError, self.file, t,
-                "Unexpected token type: `{}`, expected: `{}`.", t.class, tt);
+            fatal!(ParseError, t.location.with_filename(self.file),
+                "Unexpected token type: `{}`, expected: `{}`.", t.class, tt)
+                    .print();
         }
     }
 }
@@ -261,45 +298,54 @@ mod test {
     use super::*;
     use ast::Numerics;
 
+    macro_rules! num_test {
+        ($num:expr, $site:expr, $res:expr) => {
+            assert_eq!(
+                ast::NumNode::new($num, $site.clone()).num().unwrap().value,
+                $res);
+        };
+    }
+
     #[test]
     fn numeric_parsing() {
-        let l = location::new(1, 1, 1);
-        assert_eq!(ast::NumNode::new(2, l).num().unwrap().value, Numerics::Natural(2usize));
-        assert_eq!(ast::NumNode::new(2usize, l).num().unwrap().value, Numerics::Natural(2usize));
-        assert_eq!(ast::NumNode::new(2u32, l).num().unwrap().value, Numerics::Natural(2usize));
-        assert_eq!(ast::NumNode::new(2i32, l).num().unwrap().value, Numerics::Natural(2usize));
+        let l = Site::new();
+        num_test!(2, l, Numerics::Natural(2usize));
+        num_test!(2, l, Numerics::Natural(2usize));
+        num_test!(2usize, l, Numerics::Natural(2usize));
+        num_test!(2u32, l, Numerics::Natural(2usize));
+        num_test!(2i32, l, Numerics::Natural(2usize));
 
-        assert_eq!(ast::NumNode::new(-2, l).num().unwrap().value, Numerics::Integer(-2isize));
-        assert_eq!(ast::NumNode::new(-2i32, l).num().unwrap().value, Numerics::Integer(-2isize));
-        assert_eq!(ast::NumNode::new(-2isize, l).num().unwrap().value, Numerics::Integer(-2isize));
+        num_test!(-2, l, Numerics::Integer(-2isize));
+        num_test!(-2i32, l, Numerics::Integer(-2isize));
+        num_test!(-2isize, l, Numerics::Integer(-2isize));
 
-        assert_eq!(ast::NumNode::new(-2.62, l).num().unwrap().value, Numerics::Real(-2.62f64));
-        assert_eq!(ast::NumNode::new(2.62, l).num().unwrap().value, Numerics::Real(2.62f64));
+        num_test!(-2.62, l, Numerics::Real(-2.62f64));
+        num_test!(2.62, l, Numerics::Real(2.62f64));
 
-        assert_eq!(ast::NumNode::new("2", l).num().unwrap().value, Numerics::Natural(2));
-        assert_eq!(ast::NumNode::new("325", l).num().unwrap().value, Numerics::Natural(325));
-        assert_eq!(ast::NumNode::new("0b01010110", l).num().unwrap().value, Numerics::Natural(0b01010110));
-        assert_eq!(ast::NumNode::new("0o721", l).num().unwrap().value, Numerics::Natural(0o721));
-        assert_eq!(ast::NumNode::new("0xfa", l).num().unwrap().value, Numerics::Natural(0xfa));
-        assert_eq!(ast::NumNode::new("0xf", l).num().unwrap().value, Numerics::Natural(0xf));
-        assert_eq!(ast::NumNode::new("2.672", l).num().unwrap().value, Numerics::Real(2.672));
-        assert_eq!(ast::NumNode::new("2.672e3", l).num().unwrap().value, Numerics::Real(2672.0));
-        assert_eq!(ast::NumNode::new("2.672e+16", l).num().unwrap().value, Numerics::Real(2.672 * 10f64.powf(16f64)));
-        assert_eq!(ast::NumNode::new("2.672e-10", l).num().unwrap().value, Numerics::Real(2.672 * 10f64.powf(-10f64)));
-        assert_eq!(ast::NumNode::new("67e-4", l).num().unwrap().value, Numerics::Real(0.0067));
-        assert_eq!(ast::NumNode::new("67e+10", l).num().unwrap().value, Numerics::Natural(670000000000));
-        assert_eq!(ast::NumNode::new("-2", l).num().unwrap().value, Numerics::Integer(-2));
-        assert_eq!(ast::NumNode::new("-325", l).num().unwrap().value, Numerics::Integer(-325));
-        assert_eq!(ast::NumNode::new("-0b01010110", l).num().unwrap().value, Numerics::Integer(-0b01010110));
-        assert_eq!(ast::NumNode::new("-0o721", l).num().unwrap().value, Numerics::Integer(-0o721));
-        assert_eq!(ast::NumNode::new("-0xfa", l).num().unwrap().value, Numerics::Integer(-250));
-        assert_eq!(ast::NumNode::new("-0xf", l).num().unwrap().value, Numerics::Integer(-15));
-        assert_eq!(ast::NumNode::new("-2.672", l).num().unwrap().value, Numerics::Real(-2.672));
-        assert_eq!(ast::NumNode::new("-2.672e3", l).num().unwrap().value, Numerics::Real(-2672.0));
-        assert_eq!(ast::NumNode::new("-2.672e+16", l).num().unwrap().value, Numerics::Real(-26720000000000000.0));
-        assert_eq!(ast::NumNode::new("-2.672e-10", l).num().unwrap().value, Numerics::Real(-0.0000000002672));
-        assert_eq!(ast::NumNode::new("-67e-4", l).num().unwrap().value, Numerics::Real(-0.0067));
-        assert_eq!(ast::NumNode::new("-67e+10", l).num().unwrap().value, Numerics::Integer(-670000000000));
+        num_test!("2", l, Numerics::Natural(2));
+        num_test!("325", l, Numerics::Natural(325));
+        num_test!("0b01010110", l, Numerics::Natural(0b01010110));
+        num_test!("0o721", l, Numerics::Natural(0o721));
+        num_test!("0xfa", l, Numerics::Natural(0xfa));
+        num_test!("0xf", l, Numerics::Natural(0xf));
+        num_test!("2.672", l, Numerics::Real(2.672));
+        num_test!("2.672e3", l, Numerics::Real(2672.0));
+        num_test!("2.672e+16", l, Numerics::Real(2.672 * 10f64.powf(16f64)));
+        num_test!("2.672e-10", l, Numerics::Real(2.672 * 10f64.powf(-10f64)));
+        num_test!("67e-4", l, Numerics::Real(0.0067));
+        num_test!("67e+10", l, Numerics::Natural(670000000000));
+        num_test!("-2", l, Numerics::Integer(-2));
+        num_test!("-325", l, Numerics::Integer(-325));
+        num_test!("-0b01010110", l, Numerics::Integer(-0b01010110));
+        num_test!("-0o721", l, Numerics::Integer(-0o721));
+        num_test!("-0xfa", l, Numerics::Integer(-250));
+        num_test!("-0xf", l, Numerics::Integer(-15));
+        num_test!("-2.672", l, Numerics::Real(-2.672));
+        num_test!("-2.672e3", l, Numerics::Real(-2672.0));
+        num_test!("-2.672e+16", l, Numerics::Real(-26720000000000000.0));
+        num_test!("-2.672e-10", l, Numerics::Real(-0.0000000002672));
+        num_test!("-67e-4", l, Numerics::Real(-0.0067));
+        num_test!("-67e+10", l, Numerics::Integer(-670000000000));
 
         let s : String = String::from("-6e12");
         let num = ast::NumNode::new(&*s, l);

@@ -23,11 +23,11 @@ fn const_fold(node : &Nodes) -> Nodes {
                     callee: Box::new(const_fold(&*call.callee.call().unwrap().callee)),
                     operands: vec![left.clone()],
                     return_type: call.callee.yield_type(),
-                    location: call.callee.call().unwrap().location
+                    site: call.callee.call().unwrap().site.clone()
                 })),
                 operands: vec![right.clone()],
                 return_type: call.return_type.clone(),
-                location: call.location
+                site: call.site.clone()
             });
 
             let is_num_left  =  left.num().is_some();
@@ -50,7 +50,7 @@ fn const_fold(node : &Nodes) -> Nodes {
                         return def;
                     }
                 };
-                return Nodes::Num(ast::NumNode { value, location: call.location });
+                return Nodes::Num(ast::NumNode { value, site: call.site.clone() });
             } else {
                 return def;
             }
@@ -59,7 +59,7 @@ fn const_fold(node : &Nodes) -> Nodes {
             callee: Box::new(const_fold(&*call.callee)),
             operands: vec![const_fold(&call.operands[0])],
             return_type: call.return_type.clone(),
-            location: call.location
+            site: call.site.clone()
         });
     }
     return node.to_owned();

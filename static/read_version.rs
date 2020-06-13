@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use toml;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn out() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = env::var("OUT_DIR")?;
     let dest_path = Path::new(&out_dir).join("version.rs");
     let mut f = File::create(&dest_path).unwrap();

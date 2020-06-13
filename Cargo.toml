@@ -16,7 +16,7 @@ readme = "README.md"
 version = "0.1.0"
 edition = "2018"
 
-build = "build.rs"
+build = "static/build.rs"
 
 [features]
 debug = ["snailquote"]
