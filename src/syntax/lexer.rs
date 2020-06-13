@@ -93,7 +93,7 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
         let two_chars = partial.get(0..2).unwrap_or("\0\0");
 
         // Consume EON comment:
-        if two_chars.chars().nth(0).unwrap() == '#' || two_chars == "--" {
+        if two_chars == "#!" || two_chars == "--" {
             let old_char_ptr = current_char_ptr;
             current_char_ptr += if two_chars == "--" { 2 } else { 1 };
             loop {

@@ -48,6 +48,8 @@ and will have its own progress and check-list updates.
 
 ### Compile & Run
 
+#### Requires Rust Nightly for now.
+
 In your shell, in the root of this repository, you may write:
 ```console
 cargo run [source-file-to-compile.vh] [-o out-file] [-v]
