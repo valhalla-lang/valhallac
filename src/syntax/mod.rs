@@ -31,12 +31,8 @@ use std::collections::HashSet;
 #[cfg(feature="debug")]
 use token::ShowStream;
 
-/// Parses a given file, calling various methods from
-/// the `syntax` sub-module.
-pub fn parse_file(filename : &str) -> ast::Root {
-    let code = fs::read_to_string(filename)
-        .expect("Could not open file for reading.");
-
+pub fn parse_source(code : &str, filename : &str) -> ast::Root {
+    // First lex:
     #[cfg(feature="debug")]
     println!("Code:\n{}\n", code);
 
@@ -65,4 +61,15 @@ pub fn parse_file(filename : &str) -> ast::Root {
     println!("AST:\n{}\n", tree);
 
     tree
+
 }
+
+/// Parses a given file, calling various methods from
+/// the `syntax` sub-module.
+pub fn parse_file(filename : &str) -> ast::Root {
+    let code = fs::read_to_string(filename)
+        .expect("Could not open file for reading.");
+    parse_source(&code, filename)
+}
+
+

@@ -8,9 +8,7 @@ use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
-use colored;
 use colored::*;
-
 
 fn is_vh_file(filename : &String) -> bool {
     filename.ends_with(".vh")

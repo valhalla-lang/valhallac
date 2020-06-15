@@ -72,6 +72,10 @@ impl Issue {
         self
     }
 
+    pub fn panic(&self) -> ! {
+        panic!("Cannot continue after such an issue.")
+    }
+
     pub fn print(self) -> Self {
         unsafe {
             crate::PANIC_MESSAGE = "Compilation could not continue.";
@@ -79,14 +83,15 @@ impl Issue {
 
         eprintln!("\n{}", self);
         if self.is_fatal {
-            std::process::exit(1);
+            self.panic();
         }
+
         self
     }
 
     pub fn crash_and_burn(self) -> ! {
-        self.print();
-        std::process::exit(1)
+        self.print()
+            .panic()
     }
 }
 
@@ -150,7 +155,7 @@ impl fmt::Display for Issue {
                         let mut line_content = if let Some(Ok(line_str)) =
                             BufReader::new(file)
                                 .lines().nth(line - 1) {
-                            line_str
+                            line_str + " "
                         } else {
                             "[**] THIS LINE DOES NOT EXIST! \
                                   Either the file was deleted, \
@@ -180,8 +185,8 @@ impl fmt::Display for Issue {
             }
         }
 
-        let note_ascii = self.note_message.as_ref().map(|some|
-            format!("{} {}",
+        let note_ascii = self.note_message.as_ref().map(
+            |some| format!("{} {}",
                 "|\n+-".yellow(), some.bold()));
 
         if let Some(column) = self.site.location.column {

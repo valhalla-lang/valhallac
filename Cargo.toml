@@ -20,6 +20,7 @@ build = "static/build.rs"
 
 [features]
 debug = ["snailquote"]
+loud-panic = []
 
 [lib]
 name = "valhallac"

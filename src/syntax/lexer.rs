@@ -111,6 +111,9 @@ pub fn lex(string : &str, filename : &str) -> VecDeque<Token> {
 
             continue;
         }
+        // TODO: Consume multi-line comments (`--* ... *--`).
+        // TODO: Lex `with:` `let:` `in:` `where:` `do:`
+        // indentation blocks.
 
         let vec_brack = match two_chars {
             "[|" => Some(TokenType::LVec),

@@ -27,6 +27,8 @@ pub mod syntax;
 /// instructions for the Brokkr VM, and marshals the instructions.
 pub mod compiler;
 
+pub use syntax::parse_source;
+
 /// Parses the contents of a file with path `filename : &str`.
 pub fn parse(filename : &str) -> syntax::ast::Root {
     syntax::parse_file(filename)
@@ -59,12 +61,19 @@ pub fn set_panic() {
             if PANIC_MESSAGE.is_empty() {
                 eprintln!("\n{}", "The compiler panicked! This is a bug."
                     .white().bold());
-                eprintln!("{} {}\n", ">>>".blue(), msg.to_string().white());
+                eprintln!("{} {}\n",
+                    ">>>".blue(),
+                    msg.to_string().white());
             } else {
                 eprintln!(" {} {} {}",
                     "::".white().bold(),
                     "Halt".blue().bold(),
                     PANIC_MESSAGE.white());
+                #[cfg(any(feature="loud-panic", feature="debug"))] {
+                    eprintln!("{} {}\n",
+                        ">>>".blue(),
+                        msg.to_string().white());
+                }
             }
         }));
     }

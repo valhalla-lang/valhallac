@@ -288,6 +288,7 @@ impl<'a> ParseEnvironment<'a> {
         if t.class != tt {
             fatal!(ParseError, t.location.with_filename(self.file),
                 "Unexpected token type: `{}`, expected: `{}`.", t.class, tt)
+                    .note("Perhaps you forgot to write something?")
                     .print();
         }
     }

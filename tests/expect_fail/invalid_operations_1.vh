@@ -1,6 +1,3 @@
--- TODO: Test overloading with `f`.
--- TODO: Test casting from subsets of Real, upto Real.
-
 f : Real -> Real -> Real
 
 f a b = (1 + 1) * a + b  -- 2a + b
