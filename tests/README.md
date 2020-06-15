@@ -9,7 +9,7 @@ to continue to be expanded on.
 
 ## Failure
 
-Most tests for successful compilation at the will fail,
+Most tests for successful compilation at this point will fail,
 this is because most of the compiler features are only half
 implemented or so.  The standard library / prelude is also lacking,
 which makes this worse.
