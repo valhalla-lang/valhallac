@@ -23,11 +23,13 @@ impl SymbolEntry {
         if let StaticTypes::TFunction(_, _) = self.signature {
             return true;
         }
-        return false;
+        false
     }
 
-    pub fn was_defined(&mut self) {
+    pub fn was_defined(&mut self) -> bool {
+        let def = self.defined;
         self.defined = true;
+        def
     }
 }
 
@@ -130,6 +132,20 @@ fn search_chain(&mut self, ident : &str) -> Option<&mut SymbolTable> {
         }
     }
     return None;
+}
+
+fn unwrap_set(&self, set : &StaticTypes) -> StaticTypes {
+    if let StaticTypes::TSet(internal) = set {
+        *internal.clone()
+    } else {
+        // We should never get here, we should always have
+        // checked earlier if a function signature tries to map
+        // between non-sets.
+        use crate::site::Site;
+        issue!(TypeError, Site::new().with_filename(&self.filename),
+            "Cannot create mapping (function) between non-sets.")
+            .crash_and_burn()
+    }
 }
 
 /// # Terminology
@@ -251,10 +267,10 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
             if maybe_op_inner_type.is_none() {
                 // Fatal, we should really never get here,
                 // because we _should_ check for this earlier.
-                issue!(TypeError,
+                fatal!(TypeError,
                     (*appl_0.callee).site().with_filename(&self.filename),
                     "Function should map from a set, it does not.")
-                        .print();
+                    .print();
             }
 
             // Safe to unwrap, we've checked for none.
@@ -295,7 +311,7 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
             issue!(TypeError,
                 appl_0.callee.site().with_filename(&self.filename),
                 "Function-application / juxtaposition is not \
-                defined on type of `{}'.", appl_0_st)
+                 defined on type of `{}'.", appl_0_st)
                     .print();
         }
     }
@@ -313,6 +329,19 @@ fn resolve_assignment(&mut self,
     // Either way, we must say it is now 'defined'
     // (as well as 'declared') in the table.
 
+    // Assignment with no type annotation needs to be
+    // more flexible when it comes to types, i.e.
+    // ```
+    //    a : Int
+    //    a = 3
+    //    a = "Somethin"  -- is illegal, doesn't match type.
+    // ```
+    // Compared to:
+    // ```
+    //    a = 3
+    //    a = "Something"  -- legal, `a' has type `Nat | String` now.
+    // ```
+
     // TODO: '=' with a type annotation should
     // cast the value on the right if possible, to
     // match the annotation.  If not possible, throw
@@ -322,6 +351,7 @@ fn resolve_assignment(&mut self,
     // a function (e.g. `f x = x + 1`).
 
     let filename = &self.filename.to_owned();
+    let rhs = appl_0.operands[0].clone();
     let lhs = &appl_1.operands[0];
     // Handle variable (identifier) assignment:
     if let Nodes::Ident(ident_op_1) = lhs {
@@ -381,19 +411,102 @@ fn resolve_assignment(&mut self,
         let base_call = call_op_1.base_call();
         if !base_call.is_ident() {
             // Fatal, we must define the call on some sort of ident.
-            issue!(ParseError,
+            fatal!(ParseError,
                 base_call.site().with_filename(&self.filename),
                 "You have to assign to a call on an identifier,
-                 this identifier is the function you are defining.
-                 Expected an `identifier', found `{}'!",
-                base_call.node_type())
-                    .print();
+                 this identifier is the function you are defining.")
+                .note(&format!("Expected an `identifier', found `{}'!",
+                    base_call.node_type()))
+                .print();
         }
         // We've checked, and we may unwrap it.
         let base_call = base_call.ident().unwrap();
-        // TODO Continue, collect the arguments too!!!
+
+        let func_type;
+        if let Some(table) = self.search_chain(&base_call.value) {
+            let signatures = table.collect_signatures(&base_call.value);
+            let mut sig_iter = signatures.iter();
+            // TODO: Select which signature to use (establish some order).
+            // Specifically need to select the correct overload.
+            // For now pick a random one.
+            func_type = sig_iter.next().unwrap().to_owned(); // We know this exists.
+        } else {
+            // TODO: Determine implicit type for this function.
+            // This has to be done in a way that considers the structure
+            // of the LHS, considering all pattern matches in each of the
+            // cases, and what their types are.  The inductive case
+            // should also be analysed for what kind of functions it calls,
+            // in order to narrow down the type as much as possible.
+            func_type = StaticTypes::TUnknown;  // FIXME.
+        }
+
+        let mut left_type  = StaticTypes::TUnknown;
+        let mut right_type = StaticTypes::TUnknown;
+        // Check if we do actually have a function type.
+        if let StaticTypes::TFunction(l, r) = func_type {
+            left_type  = self.unwrap_set(&*l);  // This should have already been
+            right_type = self.unwrap_set(&*r); // checked for.
+        } else { // Fatal, needs to be a function.
+            fatal!(TypeError, call_op_1.site.with_filename(&self.filename),
+                "Trying to define a function on a variable that does \
+                 not have type of `function'.")
+                .note(&format!("`{}' has type of `{}', which is not a function.",
+                    base_call.value, func_type))
+                .print();
+        }
+
+        let lhs_operands = call_op_1.collect_operands();
+        let operand_count = lhs_operands.len();
+        let mut function_scope = SymbolTable::new(&base_call.value);
+        for (i, lhs_operand) in lhs_operands.iter().enumerate() {
+            if let Nodes::Ident(lhs_op_ident) = lhs_operand {
+                function_scope.push(&lhs_op_ident.value, left_type.clone(), true);
+                if i == operand_count - 1 {
+                    break;  // No need to disect any further.
+                }
+
+                if let StaticTypes::TFunction(l, r) = right_type {
+                    left_type  = self.unwrap_set(&*l);
+                    right_type = self.unwrap_set(&*r);
+                } else {
+                    fatal!(TypeError,
+                        lhs_operands
+                            .last().unwrap()
+                            .site().with_filename(&self.filename),
+                        "Function definition provided with too many arguments.
+                         The type signature disagrees with the number
+                         of arguments you have provided.")
+                        .note("Consider removing this, or altering \
+                               the type signature.")
+                        .print();
+                }
+            } else {
+                // TODO: Not an ident, that means we're
+                // pattern matching.  This will need a general
+                // implementation in the future.
+            }
+        }
+        // Now the function scope is populated with the arguments.
+        self.table_chain.push(function_scope); // Add the scope to the stack.
+        // Type the right side of the equality:
+        let typed_rhs = self.resolve_branch(&rhs);
+        // Check if the RHS has the correct type.
+        if typed_rhs.yield_type() == right_type {
+            appl_0.operands[0] = typed_rhs;
+        } else {
+            // TODO: If the the types disagree, but the type is
+            // a subset, just cast the type.  For now, it's only an error:
+            issue!(TypeError, rhs.site().with_filename(&self.filename),
+                "Right hand side of function definition does not agree \
+                 with type signature.
+                 Expected type of `{}', got `{}'.",
+                &right_type, &typed_rhs.yield_type())
+                .note("Either convert the value, or alter the type signature.")
+                .print();
+        }
+        // The function scope is no longer in use.
+        self.table_chain.pop();
     } else {
-        // TODO: Assignment to functions.
         // TODO: Pattern matching etc.
 
         issue!(ParseError,

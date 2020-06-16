@@ -1,4 +1,5 @@
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashSet};
+use lazy_static::lazy_static;
 
 use super::token;
 use super::ast;
@@ -7,9 +8,18 @@ use super::operators;
 use crate::{issue, site};
 use site::{Site, Location};
 
-
 use token::{Token, TokenType};
 use ast::Nodes;
+
+lazy_static! {
+    static ref EXPR_TERM : HashSet<TokenType> = {
+        let mut set = HashSet::new();
+        set.insert(TokenType::RParen);
+        set.insert(TokenType::EOF);
+        set.insert(TokenType::Term);
+        set
+    };
+}
 
 fn location_range(loc_begin : &Location, loc_end : &Location) -> Location {
     let mut loc_final = loc_end.clone();
@@ -204,13 +214,14 @@ impl<'a> ParseEnvironment<'a> {
 
 
         while self.optable.precedence(&self.stream[0].string).unwrap_or(190) > right_prec {
-            let next = &(&self.stream[0].string).clone();
+            let ahead = self.stream[0].clone();
+            let next = &ahead.string.clone();
 
             if self.ignore_newline && next == "\n" {
                 self.shift();
                 continue;
             }
-            if next == "\0" || next == "\n" || next == ")" { break; }
+            if EXPR_TERM.contains(&ahead.class) { break; }
 
             let maybe_op = self.optable.lookup(next, 2);
             if let Some(op) = maybe_op {

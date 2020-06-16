@@ -73,13 +73,17 @@ impl Issue {
     }
 
     pub fn panic(&self) -> ! {
-        panic!("Cannot continue after such an issue.")
+        panic!("Cannot continue after such an issue: `{}'.",
+            self.message)
     }
 
     pub fn print(self) -> Self {
         unsafe {
-            crate::PANIC_MESSAGE = "Compilation could not continue.";
-        };
+            #[cfg(feature="loud-panic")]
+            eprintln!("Issue was: `{}'.", self.message);
+            crate::PANIC_MESSAGE =
+                "Compilation could not continue.";
+        }
 
         eprintln!("\n{}", self);
         if self.is_fatal {
@@ -155,6 +159,8 @@ impl fmt::Display for Issue {
                         let mut line_content = if let Some(Ok(line_str)) =
                             BufReader::new(file)
                                 .lines().nth(line - 1) {
+                            // Add space at end to represent
+                            // line-feed character.
                             line_str + " "
                         } else {
                             "[**] THIS LINE DOES NOT EXIST! \

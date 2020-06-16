@@ -23,13 +23,16 @@ fn on_vh_files<F>(dir_path : &str, mut lambda : F) -> Result<Ratio, DynErr>
     where F : FnMut(&Path, String) -> bool {
     let (mut passes, mut total) = (0, 0);
     for entry in fs::read_dir(dir_path)? {
-        total += 1;
         if let Ok(path) = entry {
             let path = path.path();
             if let Ok(source) = get_source(&path) {
-               if lambda(&path, source) { passes += 1 }
+                total += 1;
+                if lambda(&path, source) { passes += 1 }
             } else {  // Otherwise just skip.
-                println!("Skipping `{}'...", path.to_string_lossy());
+                println!("     Skipping `{}'...", path
+                    .file_name().unwrap()
+                    .to_string_lossy()
+                    .underline());
             }
         }
     }
@@ -61,7 +64,9 @@ fn main() -> Result<(), DynErr> {
     let mut compile_attempt = |path: &Path, source: String| {
         count += 1;
         let filename = path.to_string_lossy();
-        let prefix = format!("{: >4}. (`{}'):",
+        // For the log.
+        eprintln!(" === Compiling: `{}' ===", filename.underline());
+        let prefix = format!("{: >3}. (`{}'):",
             count.to_string().bold(),
             path.file_stem().unwrap()
                 .to_string_lossy()
@@ -69,15 +74,16 @@ fn main() -> Result<(), DynErr> {
                 .white());
         // Catch errors:
         let did_panic = panic::catch_unwind(|| unsafe {
+            valhallac::PANIC_MESSAGE = "";
             let tree = valhallac::parse_source(&source, &filename);
             if valhallac::PANIC_MESSAGE.is_empty() {
                 // Try to compile.
                 valhallac::compile(&tree);
                 if !valhallac::PANIC_MESSAGE.is_empty() {
-                    panic!("Did not pass.");
+                    panic!("Did not pass: `{}'", valhallac::PANIC_MESSAGE);
                 }
             } else {
-                panic!("Did not pass.");
+                panic!("Did not pass: `{}'", valhallac::PANIC_MESSAGE);
             }
         });
         print!("{} {} ", prefix, ".".repeat(80 - prefix.len()));
@@ -85,7 +91,7 @@ fn main() -> Result<(), DynErr> {
     };
 
     // Expecting success:
-    println!("{} {}", "==>".blue().bold(),
+    println!("\n{} {}", "==>".blue().bold(),
         "Expecting compilation success:".white().bold());
     let succ_ratio = on_vh_files("./expect_success", |path, source| {
         let passed = compile_attempt(path, source);
@@ -98,9 +104,9 @@ fn main() -> Result<(), DynErr> {
     println!("{} {}", "==>".blue().bold(),
         "Expecting compilation failure:".white().bold());
     let fail_ratio = on_vh_files("./expect_fail", |path, source| {
-        let passed = compile_attempt(path, source);
-        println!("{}", status(!passed));
-        passed
+        let failed = !compile_attempt(path, source);
+        println!("{}", status(failed));
+        failed
     })?;
     println!();
 

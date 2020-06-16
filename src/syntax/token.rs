@@ -18,7 +18,7 @@ enum Indent {
 
 /// Contains all possible types/classes of
 /// lexiacal tokens.
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TokenType {
     /// Identifiers, variables, function names etc.
     Ident,

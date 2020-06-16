@@ -179,8 +179,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 format!("{:0.5}s", seconds)
             }.white());
-
-            println!();
         });
     }
 

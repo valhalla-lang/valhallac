@@ -166,7 +166,7 @@ impl<'a> LocalBlock<'a> {
     }
 
     fn function_assign(&mut self, left : &ast::CallNode, right : &'a Nodes) {
-        let mut arguments = left.collect_operands();
+        let mut arguments = left.collect();
         let base_node = arguments.remove(0);
 
         if let Nodes::Ident(ident) = base_node {
@@ -412,11 +412,11 @@ impl<'a> fmt::Display for LocalBlock<'a> {
         for key in self.locals_map.keys() {
             writeln!(f, "  | {: >3} |  {}", self.locals_map[key], key)?;
         }
-        writeln!(f, "  |====Globals=================")?;
+        writeln!(f, "  |====Superiors===============")?;
         for (i, c) in self.globals.iter().enumerate() {
             writeln!(f, "  | {: >3} |  {}", i, c)?;
         }
-        writeln!(f, "  |====Bytecodes===============")?;
+        writeln!(f, "  |====Bytecode================")?;
         for inst in &self.instructions {
             if let Instr::Operand(_) = inst {
                 write!(f, "{}", inst)?;

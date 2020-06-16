@@ -577,8 +577,9 @@ impl CallNode {
         }
     }
 
-    /// Collect arguments to a call.
-    pub fn collect_operands(&self) -> Vec<Nodes> {
+
+    /// List of callee and operands in a list, in a double ended queue.
+    pub fn collect_deque(&self) -> VecDeque<Nodes> {
         fn make_argument_vector(call_node : &Nodes,
                                 operands : VecDeque<Nodes>) -> VecDeque<Nodes> {
             let mut pushable = operands;
@@ -591,15 +592,26 @@ impl CallNode {
             pushable.push_front(call_node.clone());
             return pushable;
         }
-        let q = make_argument_vector(&Nodes::Call(self.clone()), VecDeque::new());
-        Vec::from(q)
+
+        make_argument_vector(
+            &Nodes::Call(self.clone()),
+            VecDeque::new())
     }
 
-    /// List of callee and operands, lisp call style list.
+    /// Flatten a function call into a list containing the
+    /// callee at the head, and arguments at tail (LISP style).
+    /// ---
+    /// Mainly for easier flattened/non-recursive
+    /// iteration over function calls.
     pub fn collect(&self) -> Vec<Nodes> {
-        let mut list = vec![self.base_call()];
-        list.extend_from_slice(&self.collect_operands());
-        list
+        Vec::from(self.collect_deque())
+    }
+
+    /// Collects only operands/arguments to a call.
+    pub fn collect_operands(&self) -> Vec<Nodes> {
+        let mut list = self.collect_deque();
+        list.pop_front();
+        Vec::from(list)
     }
 
     pub fn is_unary(&self) -> bool {
