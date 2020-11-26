@@ -8,7 +8,7 @@
 		char *name;
 		double r;
 	};
-	
+
 	int main(void)
 	{
 		struct Prod prod = { 3, 9, "John", -2.6f };
@@ -28,9 +28,8 @@ Prod = Int^2 * String * Real
 -- Prod is a type (set) of the cartesian product of:
 --   Two Ints, String and Real.
 
--- [| ... |]  denotes an ordered set, or a 'vector' if you will.
 prod : Prod -- prod is an element of Prod (prod has type Prod).
-prod = [| 3; 9; "John"; -2.6 |]  -- way to initialise, by just assigning.
+prod = (3, 9,"John", -2.6)  -- way to initialise, by just assigning.
 
 -- Now, to access elements of `prod`, we may index normally.
 assert (prod[0] is 3)
@@ -61,11 +60,11 @@ y    = index 1
 name = index 2
 r    = index 3
 
--- If we don't include the type signatures here, then 
+-- If we don't include the type signatures here, then
 -- the functions (x, y, name, etc) would be defined generally
 -- for any type overloading the `index` function.
 
-IO::put "${prod.x}, ${prod.y}, ${prod.name} ${prod.r}"
+IO::put "#{prod.x}, #{prod.y}, #{prod.name} #{prod.r}"
 
 -- And we've done the same as the C program, but
 -- all this can be automated by macros, and we were
@@ -84,19 +83,19 @@ y = index 1
 
 
 v : Vec2D
-v = [| 1; 2 |]  -- Create a Vec2D.
+v = (1, 2)  -- Create a Vec2D.
 
-[| n; m |] : Real^2 
-[| n; m |] : Vec2D -- these two type signatures mean the same thing,
+(n, m) : Real^2
+(n, m) : Vec2D -- these two type signatures mean the same thing,
 -- Neither type signature are necessary, because we have type inference.
-[| n; m |] = v  -- pattern matching assignment.
+(n, m) = v  -- pattern matching assignment.
 
 assert (v.x == n)
 assert (v.y == m)
 
 
 show : Vec2D -> String -- overload `show'.
-show v = "(${v.x}, ${v.y})"
+show v = "(#{v.x}, #{v.y})"
 
 IO::puts v -- this calls `show' impicitly,
            --  (within the definition of `puts').

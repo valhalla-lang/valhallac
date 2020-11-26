@@ -1,3 +1,7 @@
+# `valhallac`
+
+> The Valhalla Compiler
+
 <p align="center">
   <img alt="Valhalla Flag" height=230 src="https://github.com/Demonstrandum/valhalla/raw/master/assets/logo.svg.png" />
 </p>
@@ -8,7 +12,9 @@ machine that the compiled bytecode runs on, which is,
 [Brokkr VM](https://github.com/Demonstrandum/brokkr).
 
 ## IN (HEAVY) DEVELOPMENT
+**`[!!]` Planning a complete rewrite, and balancing work.**
 
+---
 
 What's been done so far on the front-end:
 
@@ -43,27 +49,27 @@ What's been done so far on the front-end:
         for future interpretation and execution by the virtual machine.
   - [ ] ...
 
-The VM, i.e. the backend for the language, is being developed independently
-and will have its own progress and check-list updates.
+The VM, i.e. the backend for the language, is being developed separately
+and will progress semi-independently.
 
 ### Compile & Run
 
 #### Requires Rust Nightly for now.
 
 In your shell, in the root of this repository, you may write:
-```console
+```sh
 cargo run [source-file-to-compile.vh] [-o out-file] [-v]
 ```
 
 or, have the compiler print out debug information like token streams, syntax trees, symbol tables, bytecode instructions, &ct., use `--features=debug`:
 
-```console
+```sh
 cargo run --features=debug [source-file.vh]
 ```
 
 For example, you can run.
-```console
-cargo run test_source.vh -v  # (verbose)
+```sh
+cargo run test_source.vh -v   # For verbose output.
 ```
 to demonstrate compilation with the included test-file (`test_source.vh`).
 The argument of a source-file to compile is, of course, necessary.
@@ -95,6 +101,6 @@ gathered, it's not a very popular paradigm...  Likely for good reason, but hey,
 it might be interesting.
 
 ### Dependencies
-Yikes...
+To be significantly reduced.
 
 ![deps](https://github.com/Demonstrandum/valhalla/raw/master/graph.png)

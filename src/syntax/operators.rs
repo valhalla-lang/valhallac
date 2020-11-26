@@ -7,7 +7,7 @@ pub enum Side {
 
 /// Operator information, including:
 /// - The string, representing what the operator looks like.
-/// - Its precedence (as an i32), the higher the int, the higher the precedence.
+/// - Its precedence (as an i32), the higher the int, the higher the precedence
 /// - Associativity, which can either be left, right, or no associativity.
 /// - The number of arguments it takes / its arity. Either one, or two.
 #[derive(Clone, Copy)]

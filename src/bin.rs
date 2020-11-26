@@ -2,7 +2,7 @@ use ::valhallac;
 
 use std::env;
 use std::{fs::File, path::Path};
-use std::io::Write;
+use std::{fmt, io::Write};
 use std::time::Instant;
 use std::collections::HashMap;
 
@@ -57,13 +57,20 @@ fn collect_flags() -> HashMap<Flags, String> {
         } else if arg_str.starts_with('-') {
             let chars = arg_str.split("");
             for c in chars {
-                if c == "-" { continue; }
-                if c == "v" {
-                    singleton(Flags::Verbose);
-                } else if c == "o" {
-                    maybe_argument = Some(Flags::Out);
-                    singleton(Flags::Out);
-                }
+                match c {
+                    "-" | "" => continue,
+                    "v" => singleton(Flags::Verbose),
+                    "o" => {
+                        maybe_argument = Some(Flags::Out);
+                        singleton(Flags::Out)
+                    },
+                    "V" => singleton(Flags::Version),
+                    chr => {
+                        argument_error(
+                            format!("`-{}' option does not exist.", chr));
+                        std::process::exit(1)
+                    }
+                };
             }
         }
     }
@@ -78,8 +85,8 @@ macro_rules! not_debug {
     };
 }
 
-fn argument_error(msg : &str) {
-    println!("{} {}", "[**]".red().bold(), msg.bold());
+fn argument_error(msg : impl fmt::Display) {
+    println!("{} {}", "[**]".red().bold(), msg.to_string().bold());
 }
 
 lazy_static! {
@@ -119,7 +126,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for file in files {
         not_debug!(verbose, {
-                println!("{}{} `{}'...", *INFO,
+                println!("{}{} `{}'", *INFO,
                      "Parsing".bold().blue(),
                      file.underline().white());
         });
@@ -135,7 +142,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Then compile into series of instructions,
         //   stored as a code block.
         not_debug!(verbose, {
-            println!("{}{}...", *INFO,
+            println!("{}{}", *INFO,
                      "Compiling".bold().blue());
         });
         let block = valhallac::compile(&root);

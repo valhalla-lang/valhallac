@@ -2,8 +2,10 @@ import :Prelude
 io = import :IO
 
 -- We don't need to define Zero and Succ, they can exist
--- as application of functions, and not mean anything more,
--- they perform no computation like normal functions.
+-- as application of functions or intances of themselves,
+-- and not mean anything more, they perform no computation,
+-- unlike normal functions.
+
 N = [ Zero ] | [ Succ n => n <- N ] where:
 	Zero : N
 	Succ : N -> N

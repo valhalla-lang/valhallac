@@ -204,7 +204,7 @@ pub fn resolve_branch(&mut self, branch : &Nodes) -> Nodes {
         if let Nodes::Call(ref mut appl_1) = *appl_0.callee {
         if let Nodes::Ident(ref ident_1) = *appl_1.callee {
             match ident_1.value.as_ref() {
-                "->" => panic!("We should have prevented this."),
+                //"->" => panic!("We should have prevented this."),
                 ":" => {
                     self.resolve_annotation(appl_0_clone, appl_1.clone());
                     // FIXME: Should we really replace the annotation with a nil?
