@@ -1,5 +1,6 @@
 Bool = [ :true
-		 :false ]
+         :false ]
+
 True = :true
 False = :false
 
